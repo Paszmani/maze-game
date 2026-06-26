@@ -49,3 +49,19 @@ export function addVec(a: Vec2, b: Vec2): Vec2 {
 export function equalsVec(a: Vec2, b: Vec2): boolean {
   return a.x === b.x && a.y === b.y;
 }
+
+export function scaleVec(v: Vec2, k: number): Vec2 {
+  return { x: v.x * k, y: v.y * k };
+}
+
+/** Distancia ao quadrado — suficiente para comparar alvos sem custo de sqrt. */
+export function dist2(a: Vec2, b: Vec2): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return dx * dx + dy * dy;
+}
+
+/** Celula `n` passos a frente de `pos` na direcao `dir`. */
+export function ahead(pos: Vec2, dir: Direction, n: number): Vec2 {
+  return addVec(pos, scaleVec(DIRECTION_VECTORS[dir], n));
+}
