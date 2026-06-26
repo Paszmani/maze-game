@@ -1,0 +1,325 @@
+/**
+ * Maquina de estados e laco de jogo — o orquestrador do core.
+ *
+ * E o unico modulo que conhece o tempo. Recebe `tick(dtMs)` do render a cada
+ * frame e converte tempo real em passos discretos de grid: o jogador anda uma
+ * celula a cada `playerInterval`, cada fantasma conforme sua velocidade/modo.
+ * Tambem cuida do que os modulos puros deixaram de fora de proposito:
+ *
+ *   - dirige o cronograma scatter/chase e comanda as meia-voltas nas viradas;
+ *   - cronometra o frightened (e pausa o cronograma enquanto ele dura);
+ *   - resolve colisoes jogador x fantasma (comer / morrer);
+ *   - conta vidas, vida-extra, e decide vitoria (pellets zerados) e game over.
+ *
+ * Fases: attract -> playing -> gameover. O reset por inatividade (voltar ao
+ * attract) e responsabilidade do render, que chama `toAttract()`.
+ */
+
+import { Direction, equalsVec, type Vec2 } from './direction.js';
+import type { Maze } from './maze.js';
+import type { Player } from './player.js';
+import { type Ghost } from './ghost-ai.js';
+import { ScatterChaseSchedule, type BaseMode } from './ghost-modes.js';
+import { Pellets } from './pellets.js';
+import { Scoring } from './scoring.js';
+import type { Rng } from './ghost-ai.js';
+
+export type GamePhase = 'attract' | 'playing' | 'gameover';
+
+export interface GameConfig {
+  startingLives: number;
+  /** Duracao do frightened apos uma power-pellet (ms). Vem de theme.gameplay. */
+  powerDurationMs: number;
+  /** Tempo-base para o jogador andar uma celula (ms) a velocidade 1.0. */
+  baseStepMs: number;
+  playerSpeed: number;
+  ghostSpeed: number;
+  /** Fator (<1) que deixa o fantasma mais lento durante o frightened. */
+  frightenedSpeedFactor: number;
+  /** Pontuacao que concede uma vida extra (uma unica vez). `null` desativa. */
+  extraLifeAt: number | null;
+  schedule: ScatterChaseSchedule;
+}
+
+export const DEFAULT_CONFIG: Omit<GameConfig, 'schedule'> = {
+  startingLives: 3,
+  powerDurationMs: 6_000,
+  baseStepMs: 150,
+  playerSpeed: 1.0,
+  ghostSpeed: 0.9,
+  frightenedSpeedFactor: 0.6,
+  extraLifeAt: 10_000,
+};
+
+export interface GameStateInit {
+  maze: Maze;
+  pellets: Pellets;
+  player: Player;
+  ghosts: Ghost[];
+  config?: Partial<GameConfig>;
+  rng?: Rng;
+}
+
+interface PlayerSpawn {
+  position: Vec2;
+  direction: Direction;
+}
+interface GhostSpawn {
+  position: Vec2;
+  direction: Direction;
+  mode: Ghost['mode'];
+}
+
+export class GameState {
+  readonly maze: Maze;
+  readonly pellets: Pellets;
+  readonly player: Player;
+  readonly ghosts: Ghost[];
+  readonly scoring = new Scoring();
+  readonly config: GameConfig;
+
+  phase: GamePhase = 'attract';
+  lives: number;
+  won = false;
+  frightenedRemainingMs = 0;
+
+  private readonly rng: Rng;
+  private scheduleElapsedMs = 0;
+  private extraLifeAwarded = false;
+  private resetPending = false;
+
+  private playerAcc = 0;
+  private ghostAccs: number[];
+
+  private readonly playerInterval: number;
+  private readonly ghostBaseInterval: number;
+  private readonly ghostFrightInterval: number;
+  private readonly ghostEatenInterval: number;
+
+  private readonly playerSpawn: PlayerSpawn;
+  private readonly ghostSpawns: GhostSpawn[];
+
+  constructor(init: GameStateInit) {
+    this.maze = init.maze;
+    this.pellets = init.pellets;
+    this.player = init.player;
+    this.ghosts = init.ghosts;
+    this.rng = init.rng ?? Math.random;
+
+    this.config = {
+      ...DEFAULT_CONFIG,
+      schedule: new ScatterChaseSchedule(),
+      ...init.config,
+    };
+    this.lives = this.config.startingLives;
+
+    const { baseStepMs, playerSpeed, ghostSpeed, frightenedSpeedFactor } = this.config;
+    this.playerInterval = baseStepMs / playerSpeed;
+    this.ghostBaseInterval = baseStepMs / ghostSpeed;
+    this.ghostFrightInterval = baseStepMs / (ghostSpeed * frightenedSpeedFactor);
+    this.ghostEatenInterval = baseStepMs / (ghostSpeed * 2);
+
+    this.playerSpawn = { position: { ...this.player.position }, direction: this.player.direction };
+    this.ghostSpawns = this.ghosts.map((g) => ({
+      position: { ...g.position },
+      direction: g.direction,
+      mode: g.mode,
+    }));
+    this.ghostAccs = this.ghosts.map(() => 0);
+  }
+
+  get score(): number {
+    return this.scoring.score;
+  }
+
+  get isFrightened(): boolean {
+    return this.frightenedRemainingMs > 0;
+  }
+
+  // --- Transicoes de fase ------------------------------------------------
+
+  /** Inicia uma partida nova: zera tudo e vai para `playing`. */
+  start(): void {
+    this.phase = 'playing';
+    this.won = false;
+    this.lives = this.config.startingLives;
+    this.extraLifeAwarded = false;
+    this.scoring.reset();
+    this.pellets.reset();
+    this.frightenedRemainingMs = 0;
+    this.scheduleElapsedMs = 0;
+    this.resetEntities();
+  }
+
+  toAttract(): void {
+    this.phase = 'attract';
+  }
+
+  // --- Laco principal ----------------------------------------------------
+
+  tick(dtMs: number): void {
+    if (this.phase !== 'playing') return;
+    this.resetPending = false;
+
+    this.advanceFrightened(dtMs);
+    this.advanceSchedule(dtMs);
+
+    this.movePlayer(dtMs);
+    if (this.phase !== 'playing' || this.resetPending) return;
+
+    this.moveGhosts(dtMs);
+  }
+
+  // --- Tempo: frightened e cronograma ------------------------------------
+
+  private currentBaseMode(): BaseMode {
+    return this.config.schedule.modeAt(this.scheduleElapsedMs);
+  }
+
+  private advanceFrightened(dtMs: number): void {
+    if (this.frightenedRemainingMs <= 0) return;
+    this.frightenedRemainingMs -= dtMs;
+    if (this.frightenedRemainingMs > 0) return;
+
+    this.frightenedRemainingMs = 0;
+    this.scoring.resetGhostChain();
+    const base = this.currentBaseMode();
+    for (const g of this.ghosts) {
+      if (g.mode === 'frightened') g.setMode(base);
+    }
+  }
+
+  /** O cronograma fica congelado enquanto o frightened dura (regra classica). */
+  private advanceSchedule(dtMs: number): void {
+    if (this.frightenedRemainingMs > 0) return;
+    const before = this.currentBaseMode();
+    this.scheduleElapsedMs += dtMs;
+    const after = this.currentBaseMode();
+    if (after === before) return;
+    for (const g of this.ghosts) {
+      if (g.mode === 'scatter' || g.mode === 'chase') g.setMode(after);
+    }
+  }
+
+  private enterFrightened(): void {
+    this.frightenedRemainingMs = this.config.powerDurationMs;
+    this.scoring.resetGhostChain();
+    for (const g of this.ghosts) {
+      if (g.mode === 'scatter' || g.mode === 'chase') g.setMode('frightened');
+    }
+  }
+
+  // --- Movimento ---------------------------------------------------------
+
+  private movePlayer(dtMs: number): void {
+    this.playerAcc += dtMs;
+    while (this.playerAcc >= this.playerInterval) {
+      this.playerAcc -= this.playerInterval;
+      this.player.update(this.maze);
+      this.eatAtPlayer();
+      if (this.phase !== 'playing') return;
+      this.checkCollisions();
+      if (this.phase !== 'playing' || this.resetPending) return;
+    }
+  }
+
+  private ghostInterval(g: Ghost): number {
+    if (g.mode === 'frightened') return this.ghostFrightInterval;
+    if (g.mode === 'eaten') return this.ghostEatenInterval;
+    return this.ghostBaseInterval;
+  }
+
+  private moveGhosts(dtMs: number): void {
+    for (let i = 0; i < this.ghosts.length; i++) {
+      const g = this.ghosts[i]!;
+      let acc = this.ghostAccs[i]! + dtMs;
+      while (acc >= this.ghostInterval(g)) {
+        acc -= this.ghostInterval(g);
+        const blinky = this.ghosts.find((other) => other.personality === 'blinky')?.position
+          ?? this.player.position;
+        g.update(
+          this.maze,
+          { pacman: this.player.position, pacmanDir: this.player.direction, blinky },
+          this.rng,
+        );
+        if (g.mode === 'eaten' && equalsVec(g.position, g.homeTarget)) {
+          g.setMode(this.currentBaseMode());
+        }
+        this.checkCollisions();
+        if (this.phase !== 'playing' || this.resetPending) {
+          this.ghostAccs[i] = acc;
+          return;
+        }
+      }
+      this.ghostAccs[i] = acc;
+    }
+  }
+
+  // --- Comer e colidir ---------------------------------------------------
+
+  private eatAtPlayer(): void {
+    const { x, y } = this.player.position;
+    const kind = this.pellets.consume(x, y);
+    if (kind === 'pellet') this.scoring.eatPellet();
+    else if (kind === 'power') {
+      this.scoring.eatPowerPellet();
+      this.enterFrightened();
+    }
+    this.checkExtraLife();
+    if (this.pellets.isCleared()) {
+      this.phase = 'gameover';
+      this.won = true;
+    }
+  }
+
+  private checkCollisions(): void {
+    for (const g of this.ghosts) {
+      if (!equalsVec(this.player.position, g.position)) continue;
+      if (g.mode === 'frightened') {
+        this.scoring.eatGhost();
+        g.setMode('eaten');
+      } else if (g.mode === 'eaten') {
+        // So os olhos voltando para casa — nao machuca ninguem.
+        continue;
+      } else {
+        this.loseLife();
+        return;
+      }
+    }
+  }
+
+  private loseLife(): void {
+    this.lives -= 1;
+    this.frightenedRemainingMs = 0;
+    this.scoring.resetGhostChain();
+    if (this.lives <= 0) {
+      this.phase = 'gameover';
+      this.won = false;
+      return;
+    }
+    this.resetEntities();
+    this.resetPending = true;
+  }
+
+  private checkExtraLife(): void {
+    if (this.config.extraLifeAt === null || this.extraLifeAwarded) return;
+    if (this.scoring.score >= this.config.extraLifeAt) {
+      this.lives += 1;
+      this.extraLifeAwarded = true;
+    }
+  }
+
+  private resetEntities(): void {
+    this.player.position = { ...this.playerSpawn.position };
+    this.player.direction = this.playerSpawn.direction;
+    this.player.desired = Direction.None;
+    this.ghosts.forEach((g, i) => {
+      const spawn = this.ghostSpawns[i]!;
+      g.position = { ...spawn.position };
+      g.direction = spawn.direction;
+      g.mode = spawn.mode;
+    });
+    this.playerAcc = 0;
+    this.ghostAccs = this.ghosts.map(() => 0);
+  }
+}
