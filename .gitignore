@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.log
+
+# Saída de runtime — nunca versionar leads do cliente
+leads/
