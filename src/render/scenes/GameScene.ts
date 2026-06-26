@@ -17,6 +17,7 @@ import { Player } from '../../core/player.js';
 import { Ghost } from '../../core/ghost-ai.js';
 import { GameState } from '../../core/game-state.js';
 import { Direction } from '../../core/direction.js';
+import { TouchControls } from '../input/touch-controls.js';
 import { MAZE_LAYOUT, PLAYER_SPAWN, GHOST_SPAWNS } from '../maze-layout.js';
 import { TILE, COLORS, GHOST_COLORS } from '../constants.js';
 
@@ -81,6 +82,10 @@ export class GameScene extends Phaser.Scene {
     if (!keyboard) throw new Error('GameScene: teclado indisponivel.');
     this.cursors = keyboard.createCursorKeys();
     this.restartKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
+    // Swipe + d-pad: principal no totem; teclado fica para o dev.
+    // Auto-registra os listeners na cena — nao precisa guardar a referencia.
+    new TouchControls(this, (dir) => this.state.player.queue(dir));
   }
 
   override update(_time: number, delta: number): void {
