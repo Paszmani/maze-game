@@ -1,0 +1,33 @@
+{
+  "id": "cliente-exemplo",
+  "name": "Cliente Exemplo",
+  "colors": {
+    "maze": "#0a5a2f",
+    "background": "#021008",
+    "pellet": "#eaffea",
+    "power": "#9cff57",
+    "player": "#9cff57",
+    "frightened": "#3344ff",
+    "eaten": "#446655",
+    "uiAccent": "#ffaa00",
+    "text": "#eaffea",
+    "ghosts": ["#ff4444", "#ffaa00", "#44ddff", "#cc66ff"]
+  },
+  "branding": {
+    "attractHeadline": "FUJA. COLETE. GANHE.",
+    "ctaButton": "TOQUE PARA COMEÇAR",
+    "leadHeadline": "Deixe seu contato e participe!"
+  },
+  "gameplay": {
+    "playerSpeed": 1.1,
+    "ghostSpeed": 0.85,
+    "powerDurationMs": 8000
+  },
+  "leadForm": {
+    "fields": [
+      { "id": "name", "label": "Nome", "type": "text", "required": true },
+      { "id": "email", "label": "E-mail", "type": "email", "required": true },
+      { "id": "interest", "label": "Interesse", "type": "select", "required": false, "options": ["Novos", "Seminovos", "Consórcio"] }
+    ]
+  }
+}

@@ -1,10 +1,13 @@
 /**
- * GameScene — a ponte entre o core e o Phaser (modulo 4).
+ * GameScene — a ponte entre o core e o Phaser (modulos 4-6).
  *
  * Responsabilidade unica: DESENHAR o estado do core e LER o input. Nenhuma regra
  * de jogo mora aqui — a cena le `state` e pinta; manda as teclas para o player e
  * chama `state.tick(delta)`. Se uma regra precisasse ser tocada aqui, a fronteira
  * core/render teria sido violada.
+ *
+ * As cores e os numeros de gameplay vem do `Theme` (recebido em `init`), nunca
+ * hardcoded. O core recebe so os numeros de gameplay — cores nunca chegam a ele.
  *
  * Render por "snapping" (entidades na celula inteira). Interpolacao suave entre
  * celulas e polimento futuro — nao muda nada no core.
@@ -19,9 +22,13 @@ import { GameState } from '../../core/game-state.js';
 import { Direction } from '../../core/direction.js';
 import { TouchControls } from '../input/touch-controls.js';
 import { MAZE_LAYOUT, PLAYER_SPAWN, GHOST_SPAWNS } from '../maze-layout.js';
-import { TILE, COLORS, GHOST_COLORS } from '../constants.js';
+import { TILE } from '../constants.js';
+import { numberToCss } from '../theme-loader.js';
+import type { Theme } from '../../theme/theme-schema.js';
+import { DEFAULT_THEME } from '../../theme/default-theme.js';
 
 export class GameScene extends Phaser.Scene {
+  private theme: Theme = DEFAULT_THEME;
   private state!: GameState;
   private wallsGfx!: Phaser.GameObjects.Graphics;
   private pelletsGfx!: Phaser.GameObjects.Graphics;
@@ -33,6 +40,11 @@ export class GameScene extends Phaser.Scene {
 
   constructor() {
     super('game');
+  }
+
+  init(): void {
+    const theme = this.registry.get('theme') as Theme | undefined;
+    if (theme) this.theme = theme;
   }
 
   create(): void {
@@ -52,7 +64,18 @@ export class GameScene extends Phaser.Scene {
         }),
     );
 
-    this.state = new GameState({ maze, pellets, player, ghosts });
+    // Apenas os numeros de gameplay do tema cruzam a fronteira para o core.
+    this.state = new GameState({
+      maze,
+      pellets,
+      player,
+      ghosts,
+      config: {
+        playerSpeed: this.theme.gameplay.playerSpeed,
+        ghostSpeed: this.theme.gameplay.ghostSpeed,
+        powerDurationMs: this.theme.gameplay.powerDurationMs,
+      },
+    });
     this.state.start();
 
     this.wallsGfx = this.add.graphics();
@@ -63,16 +86,16 @@ export class GameScene extends Phaser.Scene {
     this.hud = this.add.text(8, maze.height * TILE + 12, '', {
       fontFamily: 'monospace',
       fontSize: '22px',
-      color: COLORS.text,
+      color: this.theme.colors.text,
     });
 
     this.overlay = this.add
       .text(this.scale.width / 2, (maze.height * TILE) / 2, '', {
         fontFamily: 'monospace',
         fontSize: '32px',
-        color: COLORS.text,
+        color: this.theme.colors.text,
         align: 'center',
-        backgroundColor: '#000010cc',
+        backgroundColor: numberToCss(this.theme.colors.background) + 'cc',
       })
       .setOrigin(0.5)
       .setPadding(16)
@@ -119,7 +142,7 @@ export class GameScene extends Phaser.Scene {
 
   private drawWalls(): void {
     const g = this.wallsGfx;
-    g.fillStyle(COLORS.wall, 1);
+    g.fillStyle(this.theme.colors.maze, 1);
     for (let y = 0; y < this.state.maze.height; y++) {
       for (let x = 0; x < this.state.maze.width; x++) {
         if (this.state.maze.isWall(x, y)) {
@@ -135,10 +158,10 @@ export class GameScene extends Phaser.Scene {
     for (let y = 0; y < this.state.maze.height; y++) {
       for (let x = 0; x < this.state.maze.width; x++) {
         if (this.state.pellets.hasPowerPellet(x, y)) {
-          g.fillStyle(COLORS.power, 1);
+          g.fillStyle(this.theme.colors.power, 1);
           g.fillCircle(this.center(x), this.center(y), TILE * 0.32);
         } else if (this.state.pellets.hasPellet(x, y)) {
-          g.fillStyle(COLORS.pellet, 1);
+          g.fillStyle(this.theme.colors.pellet, 1);
           g.fillCircle(this.center(x), this.center(y), TILE * 0.12);
         }
       }
@@ -150,16 +173,16 @@ export class GameScene extends Phaser.Scene {
     g.clear();
 
     const p = this.state.player.position;
-    g.fillStyle(COLORS.player, 1);
+    g.fillStyle(this.theme.colors.player, 1);
     g.fillCircle(this.center(p.x), this.center(p.y), TILE * 0.42);
 
     for (const ghost of this.state.ghosts) {
       const color =
         ghost.mode === 'frightened'
-          ? COLORS.frightened
+          ? this.theme.colors.frightened
           : ghost.mode === 'eaten'
-            ? COLORS.eaten
-            : GHOST_COLORS[ghost.personality];
+            ? this.theme.colors.eaten
+            : this.theme.colors.ghosts[ghost.personality];
       g.fillStyle(color, 1);
       g.fillCircle(this.center(ghost.position.x), this.center(ghost.position.y), TILE * 0.42);
     }

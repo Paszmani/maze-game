@@ -1,0 +1,33 @@
+{
+  "id": "gsb-default",
+  "name": "Grupo Sudeste Banzai",
+  "colors": {
+    "maze": "#1b3a8f",
+    "background": "#000010",
+    "pellet": "#ffffff",
+    "power": "#ffcc00",
+    "player": "#ffcc00",
+    "frightened": "#2233ff",
+    "eaten": "#556699",
+    "uiAccent": "#e30613",
+    "text": "#ffffff",
+    "ghosts": ["#ff0000", "#ff66cc", "#00ffff", "#ff9900"]
+  },
+  "branding": {
+    "attractHeadline": "DESVIE. COLETE. VENÇA.",
+    "ctaButton": "TOCAR PARA JOGAR",
+    "leadHeadline": "Cadastre-se e concorra a um brinde!"
+  },
+  "gameplay": {
+    "playerSpeed": 1.0,
+    "ghostSpeed": 0.9,
+    "powerDurationMs": 6000
+  },
+  "leadForm": {
+    "fields": [
+      { "id": "name", "label": "Nome", "type": "text", "required": true, "maxLength": 60 },
+      { "id": "email", "label": "E-mail", "type": "email", "required": true },
+      { "id": "phone", "label": "Telefone", "type": "tel", "required": false }
+    ]
+  }
+}
