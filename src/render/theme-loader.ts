@@ -9,6 +9,7 @@
 
 import { resolveTheme, type Theme } from '../theme/theme-schema.js';
 import { DEFAULT_THEME } from '../theme/default-theme.js';
+import { getKiosk } from '../shell/bridge.js';
 
 /** Chave do localStorage onde o editor grava o tema em edicao para a previa. */
 export const PREVIEW_KEY = 'kioskMazeThemeDraft';
@@ -44,6 +45,8 @@ export interface ActiveTheme {
  */
 export async function loadActiveTheme(): Promise<ActiveTheme> {
   const params = new URLSearchParams(window.location.search);
+
+  // Editor (browser): le o rascunho do localStorage.
   if (params.has('preview')) {
     try {
       const raw = JSON.parse(localStorage.getItem(PREVIEW_KEY) ?? '{}');
@@ -52,6 +55,18 @@ export async function loadActiveTheme(): Promise<ActiveTheme> {
       return { theme: DEFAULT_THEME, base: '' };
     }
   }
+
+  // Kiosk (Electron): le o tema do disco, sprites ja embutidos como data-URI.
+  const kiosk = getKiosk();
+  if (kiosk) {
+    try {
+      return { theme: resolveTheme(await kiosk.loadTheme()), base: '' };
+    } catch {
+      return { theme: DEFAULT_THEME, base: '' };
+    }
+  }
+
+  // Web: busca o arquivo servido.
   const id = activeThemeId();
   return { theme: await loadTheme(themeUrl(id)), base: `themes/${id}/` };
 }
