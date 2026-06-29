@@ -1,0 +1,20 @@
+appId: com.gsb.kioskmaze
+productName: KioskMaze
+directories:
+  output: release
+# A casca + o bundle web. Os temas vao no bundle (dist/themes); para trocar sem
+# rebuild, coloque uma pasta `themes/` ao lado do .exe (o main prioriza ela).
+files:
+  - dist/**/*
+  - shell/**/*
+  - package.json
+win:
+  # `dir` (pasta win-unpacked com KioskMaze.exe) + `zip` para transporte.
+  # Evita o alvo `portable`/`nsis`, que baixa o winCodeSign e exige privilegio de
+  # symlink (admin/Modo Desenvolvedor) no Windows.
+  target:
+    - dir
+    - zip
+  artifactName: ${productName}-${version}.${ext}
+# Sem assinatura de codigo (app interno) — dispensa o winCodeSign.
+signAndEditExecutable: false

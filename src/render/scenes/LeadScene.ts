@@ -190,7 +190,7 @@ export class LeadScene extends Phaser.Scene {
     const lead: Lead = {
       fields,
       score: this.score,
-      terminalId: terminalId(),
+      terminalId: (this.registry.get('terminalId') as string | undefined) ?? terminalId(),
       themeId: this.theme.id,
       timestamp: new Date().toISOString(),
     };
