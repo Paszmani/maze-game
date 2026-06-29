@@ -14,21 +14,9 @@ import { LeadScene } from './render/scenes/LeadScene.js';
 import { MAZE_LAYOUT } from './render/maze-layout.js';
 import { TILE, HUD_HEIGHT } from './render/constants.js';
 import { loadActiveTheme, numberToCss } from './render/theme-loader.js';
-import { getKiosk } from './shell/bridge.js';
 
 async function boot(): Promise<void> {
   const { theme, base } = await loadActiveTheme();
-
-  // Terminal de origem do lead: config do kiosk (Electron), ou ?terminal=, ou default.
-  let terminal = new URLSearchParams(window.location.search).get('terminal') ?? 'totem-01';
-  const kiosk = getKiosk();
-  if (kiosk) {
-    try {
-      terminal = (await kiosk.getConfig()).terminalId || terminal;
-    } catch {
-      /* mantem o default */
-    }
-  }
 
   const cols = MAZE_LAYOUT[0]!.length;
   const rows = MAZE_LAYOUT.length;
@@ -53,7 +41,6 @@ async function boot(): Promise<void> {
   // entao ja esta disponivel. `themeBase` e a pasta dos assets do tema ativo.
   game.registry.set('theme', theme);
   game.registry.set('themeBase', base);
-  game.registry.set('terminalId', terminal);
 }
 
 void boot();
