@@ -57,22 +57,8 @@ export class WebLeadStore implements LeadStore {
   }
 }
 
-/** Store que grava em disco via Electron (JSON-por-lead + CSV no main process). */
-class ElectronLeadStore implements LeadStore {
-  constructor(private readonly bridge: { saveLead(lead: Lead): Promise<void> }) {}
-  save(lead: Lead): void {
-    // Fire-and-forget: a gravacao em disco roda no main process.
-    void this.bridge.saveLead(lead).catch(() => {});
-  }
-  all(): Lead[] {
-    return []; // fonte de verdade fica no disco (CSV consolidado no main)
-  }
-  clear(): void {}
-}
-
 export function createLeadStore(): LeadStore {
-  const kiosk = window.kiosk;
-  return kiosk ? new ElectronLeadStore(kiosk) : new WebLeadStore(window.localStorage);
+  return new WebLeadStore(window.localStorage);
 }
 
 /** Identifica a maquina de origem do lead. `?terminal=<id>`, default 'totem-01'. */

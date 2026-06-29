@@ -4,8 +4,6 @@
   "private": true,
   "type": "module",
   "description": "Jogo de labirinto para totem de evento — core agnostico de engine",
-  "author": "Grupo Sudeste Banzai",
-  "main": "shell/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -13,16 +11,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "demo": "tsx scripts/demo.ts",
-    "electron": "electron .",
-    "dist": "vite build && electron-builder"
+    "demo": "tsx scripts/demo.ts"
   },
   "dependencies": {
     "phaser": "^3.88.2"
   },
   "devDependencies": {
-    "electron": "^33.0.2",
-    "electron-builder": "^25.1.8",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vite": "^6.0.7",
