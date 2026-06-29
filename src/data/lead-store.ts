@@ -57,8 +57,25 @@ export class WebLeadStore implements LeadStore {
   }
 }
 
+/**
+ * Store nativo (Electron ou Android/Capacitor): grava em disco via a ponte
+ * `window.kiosk` (que o preload do Electron ou o Capacitor populam). A serializacao
+ * em arquivo/CSV roda do outro lado da ponte.
+ */
+class NativeLeadStore implements LeadStore {
+  constructor(private readonly bridge: { saveLead(lead: Lead): Promise<void> }) {}
+  save(lead: Lead): void {
+    void this.bridge.saveLead(lead).catch(() => {});
+  }
+  all(): Lead[] {
+    return []; // fonte de verdade fica no disco (CSV consolidado)
+  }
+  clear(): void {}
+}
+
 export function createLeadStore(): LeadStore {
-  return new WebLeadStore(window.localStorage);
+  const kiosk = window.kiosk;
+  return kiosk ? new NativeLeadStore(kiosk) : new WebLeadStore(window.localStorage);
 }
 
 /** Identifica a maquina de origem do lead. `?terminal=<id>`, default 'totem-01'. */

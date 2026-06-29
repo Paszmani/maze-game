@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">KioskMaze</string>
+    <string name="title_activity_main">KioskMaze</string>
+    <string name="package_name">com.gsb.kioskmaze</string>
+    <string name="custom_url_scheme">com.gsb.kioskmaze</string>
+</resources>
