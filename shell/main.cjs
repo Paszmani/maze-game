@@ -51,6 +51,12 @@ function themesRoot() {
   );
 }
 
+// Pasta GRAVAVEL de temas (ao lado do exe). O bundle (dist/themes) e read-only
+// dentro do asar, entao temas criados/editados pelo editor vao para ca.
+function externalThemesDir() {
+  return path.join(baseDir(), 'themes');
+}
+
 function leadsDir() {
   return path.join(baseDir(), 'data', 'leads');
 }
@@ -149,6 +155,24 @@ function registerIpc() {
     }
     inlineSprites(raw, dir);
     return raw;
+  });
+
+  ipcMain.handle('kiosk:saveTheme', (_event, theme) => {
+    const id = (theme && typeof theme.id === 'string' && theme.id) || 'custom';
+    const dir = path.join(externalThemesDir(), id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'theme.json'), JSON.stringify(theme, null, 2), 'utf8');
+    // Aponta o totem para este tema.
+    const cfgFile = path.join(baseDir(), 'config.json');
+    let cfg = {};
+    try {
+      cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
+    } catch {
+      /* config novo */
+    }
+    cfg.themeId = id;
+    fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2), 'utf8');
+    return { ok: true, id };
   });
 
   ipcMain.handle('kiosk:saveLead', (_event, lead) => {

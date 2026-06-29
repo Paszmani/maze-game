@@ -60,6 +60,18 @@ data/leads/          SAÍDA, criada em runtime:
 - **Leads**: gravados na hora em `data/leads/`. Exporte por pendrive copiando essa
   pasta. O CSV é regenerado a cada lead (une colunas de schemas diferentes).
 
+## Personalizar no próprio totem
+
+Na tela inicial (Attract) há o botão **⚙ Personalizar** (canto inferior direito) →
+abre o editor de tema dentro do app. No totem (Electron), o editor mostra
+**"Salvar no totem"**, que grava o tema em `themes/<id>/theme.json` (pasta gravável
+ao lado do .exe) e aponta o `config.json` para ele. **"Voltar ao jogo"** recarrega
+o jogo já com o tema novo. (No browser, em vez de salvar, o editor oferece
+**"Baixar theme.json"**.)
+
+> O botão ⚙ fica visível para qualquer um. Se quiser acesso só do operador, dá para
+> escondê-lo atrás de um gesto/senha — me avise.
+
 ## Lockdown
 
 - Tela cheia + `kiosk`, sem moldura, sem menu.

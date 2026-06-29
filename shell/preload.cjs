@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('kiosk', {
   isKiosk: true,
   getConfig: () => ipcRenderer.invoke('kiosk:getConfig'),
   loadTheme: () => ipcRenderer.invoke('kiosk:loadTheme'),
+  saveTheme: (theme) => ipcRenderer.invoke('kiosk:saveTheme', theme),
   saveLead: (lead) => ipcRenderer.invoke('kiosk:saveLead', lead),
   revealLeads: () => ipcRenderer.invoke('kiosk:revealLeads'),
 });

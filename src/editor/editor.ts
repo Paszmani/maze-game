@@ -10,6 +10,7 @@
  */
 
 import { PREVIEW_KEY } from '../render/theme-loader.js';
+import { getKiosk } from '../shell/bridge.js';
 
 const GHOST_LABELS = ['Blinky', 'Pinky', 'Inky', 'Clyde'] as const;
 const LEAD_TYPES = ['text', 'email', 'tel', 'select', 'checkbox'] as const;
@@ -318,7 +319,8 @@ let timer: number | undefined;
 
 function updatePreview(): void {
   localStorage.setItem(PREVIEW_KEY, JSON.stringify(buildExport()));
-  iframe.src = `/?preview=1&t=${++previewTick}`;
+  // Caminho relativo: funciona servido (web) e via file:// (Electron).
+  iframe.src = `index.html?preview=1&t=${++previewTick}`;
 }
 
 function schedule(): void {
@@ -399,11 +401,25 @@ function importDraft(o: any): void {
 // --- Wire up ---------------------------------------------------------------
 
 (document.getElementById('refresh') as HTMLButtonElement).addEventListener('click', updatePreview);
-(document.getElementById('play') as HTMLButtonElement).addEventListener('click', () => {
-  localStorage.setItem(PREVIEW_KEY, JSON.stringify(buildExport()));
-  window.open('/?preview=1', '_blank');
+(document.getElementById('back') as HTMLButtonElement).addEventListener('click', () => {
+  window.location.href = 'index.html';
 });
 (document.getElementById('download') as HTMLButtonElement).addEventListener('click', download);
+
+// No totem (Electron), salva o tema direto no disco e aponta o config para ele.
+const kiosk = getKiosk();
+const saveBtn = document.getElementById('save-disk') as HTMLButtonElement;
+if (kiosk) {
+  saveBtn.style.display = '';
+  saveBtn.addEventListener('click', async () => {
+    try {
+      await kiosk.saveTheme(buildExport());
+      alert('Tema salvo no totem. Use "Voltar ao jogo" para aplicar.');
+    } catch {
+      alert('Falha ao salvar o tema.');
+    }
+  });
+}
 (document.getElementById('import') as HTMLInputElement).addEventListener('change', async (e) => {
   const file = (e.target as HTMLInputElement).files?.[0];
   if (!file) return;

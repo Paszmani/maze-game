@@ -16,5 +16,5 @@ win:
     - dir
     - zip
   artifactName: ${productName}-${version}.${ext}
-# Sem assinatura de codigo (app interno) — dispensa o winCodeSign.
-signAndEditExecutable: false
+  # Sem assinatura/edicao do exe (app interno) — dispensa o winCodeSign.
+  signAndEditExecutable: false

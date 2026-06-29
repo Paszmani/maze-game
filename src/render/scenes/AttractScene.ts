@@ -90,7 +90,29 @@ export class AttractScene extends Phaser.Scene {
     const start = (): void => {
       this.scene.start('game');
     };
-    this.input.once('pointerdown', start);
+    // Zona de toque (tela toda) inicia o jogo. `topOnly` (default) garante que o
+    // botao de customizar, por cima, receba o toque sem disparar o start.
+    this.add.zone(0, 0, width, height).setOrigin(0, 0).setInteractive().on('pointerdown', start);
     this.input.keyboard?.once('keydown', start);
+
+    this.buildEditorButton(width, height);
+  }
+
+  /** Botao discreto para o operador abrir a tela de customizacao (editor de tema). */
+  private buildEditorButton(width: number, height: number): void {
+    this.add
+      .text(width - 10, height - 10, '⚙ Personalizar', {
+        fontFamily: 'monospace',
+        fontSize: '15px',
+        color: this.theme.colors.text,
+        backgroundColor: '#000000aa',
+      })
+      .setOrigin(1, 1)
+      .setPadding(8, 6, 8, 6)
+      .setDepth(50)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => {
+        window.location.href = 'editor.html';
+      });
   }
 }

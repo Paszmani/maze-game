@@ -4,3 +4,4 @@ dist/
 
 # Saída de runtime — nunca versionar leads do cliente
 leads/
+release/

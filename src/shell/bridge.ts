@@ -16,6 +16,8 @@ export interface KioskBridge {
   getConfig(): Promise<KioskConfig>;
   /** Tema lido do disco, com sprites ja embutidos como data-URI. */
   loadTheme(): Promise<unknown>;
+  /** Grava o tema (do editor) no disco e aponta o config para ele. */
+  saveTheme(theme: unknown): Promise<{ ok: boolean; id: string }>;
   saveLead(lead: Lead): Promise<void>;
   /** Abre a pasta de leads no explorador (para o operador copiar/exportar). */
   revealLeads(): Promise<void>;
