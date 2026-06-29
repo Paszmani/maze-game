@@ -47,6 +47,10 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.scene.start('attract');
+    // `?screen=lead|game` pula direto para uma cena (dev/teste); default attract.
+    const screen = new URLSearchParams(window.location.search).get('screen');
+    if (screen === 'lead') this.scene.start('lead', { score: 1234 });
+    else if (screen === 'game') this.scene.start('game');
+    else this.scene.start('attract');
   }
 }
