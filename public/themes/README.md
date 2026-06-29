@@ -23,11 +23,21 @@ public/themes/<id>/
 | `colors` | `maze`, `background`, `pellet`, `power`, `player`, `frightened`, `eaten`, `uiAccent` | Cores em hex `#rrggbb`. |
 | `colors` | `text` | Cor do texto (hex). |
 | `colors` | `ghosts` | Lista de 4 cores hex, na ordem dos 4 fantasmas. |
+| `sprites` | `player`, `pellet`, `powerPellet`, `frightened` | Caminho de PNG (relativo à pasta do tema). Substitui a forma desenhada. |
+| `sprites` | `ghosts` | Lista de 4 PNGs (ordem dos fantasmas) **ou** objeto `{ "blinky": "...", ... }`. |
+| `sprites` | `mazeBackground`, `attractBackground` | Imagens de fundo do jogo e da attract (opcional). |
 | `branding` | `attractHeadline`, `ctaButton`, `leadHeadline` | Textos das telas. Maiúsculas, curtos. |
-| `branding` | `logo` | Nome do arquivo do logo (opcional). |
+| `branding` | `logo` | Caminho do PNG do logo (opcional). |
+| `attract` | `title`, `headline`, `cta` | Estilo de cada texto: `{ visible, color, size, y }` (`cta` também tem `background`). `y` = fração 0..1 da altura. |
+| `attract` | `logo` | `{ visible, scale, y }` do logo na attract. |
+| `attract` | `showPlayer` | Mostra (ou não) o "player" cruzando a base. |
 | `gameplay` | `playerSpeed`, `ghostSpeed` | Velocidades relativas (1.0 = base). |
 | `gameplay` | `powerDurationMs` | Duração do modo "frightened" em ms. |
 | `leadForm` | `fields` | Campos do formulário de lead (ver abaixo). |
+
+**Todo campo é opcional.** Informe só o que quiser mudar; o resto usa o padrão.
+Para trocar os personagens por imagens, basta apontar `sprites.player` e
+`sprites.ghosts` para os PNGs — sem nenhuma mudança de código.
 
 ## Campos de lead (`leadForm.fields`)
 

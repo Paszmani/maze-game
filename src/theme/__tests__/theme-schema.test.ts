@@ -93,3 +93,58 @@ describe('resolveTheme — fallback e validacao', () => {
     expect(DEFAULT_THEME.colors.maze).toBe(before);
   });
 });
+
+describe('resolveTheme — sprites', () => {
+  it('sem sprites, tudo null (forma primitiva)', () => {
+    const t = resolveTheme({});
+    expect(t.sprites.player).toBeNull();
+    expect(t.sprites.ghosts.blinky).toBeNull();
+  });
+
+  it('aceita caminhos de sprite e mapeia fantasmas por array', () => {
+    const t = resolveTheme({
+      sprites: { player: 'p.png', ghosts: ['b.png', 'pk.png', 'i.png', 'c.png'] },
+    });
+    expect(t.sprites.player).toBe('p.png');
+    expect(t.sprites.ghosts.blinky).toBe('b.png');
+    expect(t.sprites.ghosts.clyde).toBe('c.png');
+  });
+
+  it('aceita fantasmas por objeto (parcial), resto null', () => {
+    const t = resolveTheme({ sprites: { ghosts: { blinky: 'b.png' } } });
+    expect(t.sprites.ghosts.blinky).toBe('b.png');
+    expect(t.sprites.ghosts.pinky).toBeNull();
+  });
+
+  it('descarta caminho nao-string', () => {
+    const t = resolveTheme({ sprites: { player: 123 } });
+    expect(t.sprites.player).toBeNull();
+  });
+});
+
+describe('resolveTheme — attract (estilo)', () => {
+  it('default completo quando ausente', () => {
+    const t = resolveTheme({});
+    expect(t.attract.title.visible).toBe(true);
+    expect(t.attract.cta.background).toBe(DEFAULT_THEME.attract.cta.background);
+    expect(t.attract.showPlayer).toBe(true);
+  });
+
+  it('mescla overrides parciais', () => {
+    const t = resolveTheme({
+      attract: { showPlayer: false, title: { visible: false }, cta: { color: '#101010', background: '#202020' } },
+    });
+    expect(t.attract.showPlayer).toBe(false);
+    expect(t.attract.title.visible).toBe(false);
+    expect(t.attract.cta.color).toBe(0x101010);
+    expect(t.attract.cta.background).toBe(0x202020);
+    // campos nao informados mantem default
+    expect(t.attract.headline.size).toBe(DEFAULT_THEME.attract.headline.size);
+  });
+
+  it('valida y como fracao 0..1; fora disso cai no default', () => {
+    expect(resolveTheme({ attract: { title: { y: 0.75 } } }).attract.title.y).toBe(0.75);
+    expect(resolveTheme({ attract: { title: { y: 5 } } }).attract.title.y).toBe(DEFAULT_THEME.attract.title.y);
+    expect(resolveTheme({ attract: { title: { y: -1 } } }).attract.title.y).toBe(DEFAULT_THEME.attract.title.y);
+  });
+});

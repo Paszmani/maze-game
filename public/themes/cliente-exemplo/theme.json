@@ -23,6 +23,20 @@
     "ghostSpeed": 0.85,
     "powerDurationMs": 8000
   },
+  "sprites": {
+    "player": "sprites/player.png",
+    "ghosts": [
+      "sprites/ghost-blinky.png",
+      "sprites/ghost-pinky.png",
+      "sprites/ghost-inky.png",
+      "sprites/ghost-clyde.png"
+    ]
+  },
+  "attract": {
+    "title": { "color": "#9cff57", "size": 28, "y": 0.16 },
+    "headline": { "color": "#eaffea", "size": 26 },
+    "cta": { "color": "#021008", "background": "#9cff57", "y": 0.7 }
+  },
   "leadForm": {
     "fields": [
       { "id": "name", "label": "Nome", "type": "text", "required": true },

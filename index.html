@@ -11,10 +11,13 @@
         height: 100%;
         background: #000010;
         overflow: hidden;
-        display: flex;
-        align-items: center;
-        justify-content: center;
         touch-action: none;
+      }
+      /* Viewport explicito: o Phaser (Scale.FIT) precisa de um container com
+         largura real. Em layout flex o #game colapsava para 0 de largura. */
+      #game {
+        width: 100vw;
+        height: 100vh;
       }
     </style>
   </head>

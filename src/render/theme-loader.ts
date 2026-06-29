@@ -10,6 +10,9 @@
 import { resolveTheme, type Theme } from '../theme/theme-schema.js';
 import { DEFAULT_THEME } from '../theme/default-theme.js';
 
+/** Chave do localStorage onde o editor grava o tema em edicao para a previa. */
+export const PREVIEW_KEY = 'kioskMazeThemeDraft';
+
 export function activeThemeId(): string {
   const params = new URLSearchParams(window.location.search);
   return params.get('theme') ?? 'gsb-default';
@@ -27,6 +30,35 @@ export async function loadTheme(url: string = themeUrl()): Promise<Theme> {
   } catch {
     return DEFAULT_THEME;
   }
+}
+
+export interface ActiveTheme {
+  theme: Theme;
+  /** Pasta-base dos assets do tema. Vazia quando os sprites sao data-URIs. */
+  base: string;
+}
+
+/**
+ * Decide a fonte do tema: `?preview=1` le o rascunho do editor (localStorage,
+ * sprites como data-URI -> base vazia); senao busca `themes/<id>/theme.json`.
+ */
+export async function loadActiveTheme(): Promise<ActiveTheme> {
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('preview')) {
+    try {
+      const raw = JSON.parse(localStorage.getItem(PREVIEW_KEY) ?? '{}');
+      return { theme: resolveTheme(raw), base: '' };
+    } catch {
+      return { theme: DEFAULT_THEME, base: '' };
+    }
+  }
+  const id = activeThemeId();
+  return { theme: await loadTheme(themeUrl(id)), base: `themes/${id}/` };
+}
+
+/** Caminhos absolutos (data:, http, blob:, /) nao recebem a pasta-base na frente. */
+export function assetUrl(base: string, path: string): string {
+  return /^(data:|https?:|blob:|\/)/.test(path) ? path : base + path;
 }
 
 /** 0xRRGGBB -> "#rrggbb", para onde o Phaser/CSS pede string. */

@@ -1,7 +1,6 @@
 /**
  * Tema de fallback — completo e sempre valido. Todo campo ausente ou malformado
  * em um theme.json cai para o valor correspondente daqui (ver `resolveTheme`).
- * Sao as mesmas cores que o render usava hardcoded antes do sistema de tema.
  */
 
 import type { Theme } from './theme-schema.js';
@@ -37,16 +36,27 @@ export const DEFAULT_THEME: Theme = {
     ghostSpeed: 0.9,
     powerDurationMs: 6000,
   },
+  // Sem sprites por padrao -> o render usa formas primitivas (cores acima).
   sprites: {
     player: null,
     pellet: null,
     powerPellet: null,
-    ghosts: [],
+    frightened: null,
+    ghosts: { blinky: null, pinky: null, inky: null, clyde: null },
+    mazeBackground: null,
+    attractBackground: null,
   },
   audio: {
     chomp: null,
     powerup: null,
     gameover: null,
+  },
+  attract: {
+    showPlayer: true,
+    title: { visible: true, color: 0xe30613, size: 24, y: 0.2 },
+    headline: { visible: true, color: 0xffffff, size: 30, y: 0.4 },
+    cta: { visible: true, color: 0x000010, background: 0xffcc00, size: 26, y: 0.66 },
+    logo: { visible: true, scale: 1, y: 0.5 },
   },
   leadForm: {
     fields: [
