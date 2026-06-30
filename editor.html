@@ -84,6 +84,33 @@
       iframe { width: 100%; flex: 1; border: 1px solid var(--line); border-radius: 8px; background: #000; }
       .actions { display: flex; gap: 8px; flex-wrap: wrap; }
       .hint { color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+      /* Mobile: 1 coluna com a prévia no topo (grid respeita `order`). */
+      @media (max-width: 760px) {
+        body {
+          grid-template-columns: 1fr;
+          height: auto;
+          min-height: 100vh;
+          overflow: auto;
+        }
+        #side {
+          order: -1;
+          border-left: none;
+          border-bottom: 1px solid var(--line);
+        }
+        #side iframe {
+          height: 42vh;
+          flex: none;
+        }
+        #form {
+          overflow: visible;
+          padding: 16px 16px 60px;
+        }
+        .row {
+          grid-template-columns: 1fr;
+          gap: 4px;
+        }
+      }
     </style>
   </head>
   <body>

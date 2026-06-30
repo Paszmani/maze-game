@@ -94,8 +94,14 @@ export class LeadScene extends Phaser.Scene {
     Object.assign(form.style, {
       display: 'flex',
       flexDirection: 'column',
-      gap: '10px',
-      width: '320px',
+      gap: '12px',
+      // Card fluido: confortavel no mobile e no totem.
+      width: 'clamp(260px, 86vw, 420px)',
+      boxSizing: 'border-box',
+      padding: '22px',
+      borderRadius: '16px',
+      background: 'rgba(0, 0, 0, 0.35)',
+      boxShadow: '0 8px 30px rgba(0,0,0,0.45)',
       fontFamily: 'monospace',
     } satisfies Partial<CSSStyleDeclaration>);
 
@@ -134,8 +140,11 @@ export class LeadScene extends Phaser.Scene {
 
     const inputStyle: Partial<CSSStyleDeclaration> = {
       padding: '12px',
-      fontSize: '18px',
-      borderRadius: '6px',
+      minHeight: '48px', // alvo de toque confortavel
+      boxSizing: 'border-box',
+      width: '100%',
+      fontSize: '16px', // >=16px evita zoom automatico no iOS
+      borderRadius: '8px',
       border: `2px solid ${numberToCss(colors.maze)}`,
       background: '#ffffff',
       color: '#111111',
@@ -164,6 +173,16 @@ export class LeadScene extends Phaser.Scene {
 
     const input = document.createElement('input');
     input.type = field.type === 'email' ? 'email' : field.type === 'tel' ? 'tel' : 'text';
+    // Teclado on-screen apropriado no mobile.
+    if (field.type === 'email') {
+      input.inputMode = 'email';
+      input.autocomplete = 'email';
+    } else if (field.type === 'tel') {
+      input.inputMode = 'tel';
+      input.autocomplete = 'tel';
+    } else {
+      input.autocomplete = 'on';
+    }
     if (field.maxLength) input.maxLength = field.maxLength;
     Object.assign(input.style, inputStyle);
     wrap.append(input);
@@ -171,15 +190,25 @@ export class LeadScene extends Phaser.Scene {
     return wrap;
   }
 
+  private flagInvalid(c: Control, message: string): void {
+    this.error.setText(message);
+    c.el.style.borderColor = numberToCss(this.theme.colors.uiAccent);
+    if (c.el instanceof HTMLInputElement || c.el instanceof HTMLSelectElement) c.el.focus();
+  }
+
   private submit(): void {
+    // Limpa marcas de erro anteriores.
+    for (const c of this.controls) c.el.style.borderColor = numberToCss(this.theme.colors.maze);
+    this.error.setText('');
+
     for (const c of this.controls) {
       const value = c.get();
       if (c.field.required && value.length === 0) {
-        this.error.setText(`Preencha: ${c.field.label}`);
+        this.flagInvalid(c, `Preencha: ${c.field.label}`);
         return;
       }
       if (c.field.type === 'email' && value.length > 0 && !EMAIL_RE.test(value)) {
-        this.error.setText('E-mail inválido.');
+        this.flagInvalid(c, 'E-mail inválido.');
         return;
       }
     }
