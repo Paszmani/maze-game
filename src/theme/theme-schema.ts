@@ -60,6 +60,8 @@ export interface ThemeSprites {
   pellet: string | null;
   powerPellet: string | null;
   frightened: string | null;
+  /** Sprite da fruta/coletavel bonus. */
+  fruit: string | null;
   ghosts: Record<Personality, string | null>;
   mazeBackground: string | null;
   attractBackground: string | null;
@@ -190,6 +192,7 @@ function resolveSprites(raw: unknown, fb: ThemeSprites): ThemeSprites {
     pellet: strOrNull(s.pellet, fb.pellet),
     powerPellet: strOrNull(s.powerPellet, fb.powerPellet),
     frightened: strOrNull(s.frightened, fb.frightened),
+    fruit: strOrNull(s.fruit, fb.fruit),
     ghosts,
     mazeBackground: strOrNull(s.mazeBackground, fb.mazeBackground),
     attractBackground: strOrNull(s.attractBackground, fb.attractBackground),

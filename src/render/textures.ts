@@ -12,6 +12,7 @@ export const TEX = {
   pellet: 'sprite-pellet',
   power: 'sprite-power',
   frightened: 'sprite-frightened',
+  fruit: 'sprite-fruit',
   ghost: (p: Personality): string => `sprite-ghost-${p}`,
   mazeBg: 'sprite-maze-bg',
   attractBg: 'sprite-attract-bg',

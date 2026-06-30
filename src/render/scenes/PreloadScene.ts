@@ -40,6 +40,7 @@ export class PreloadScene extends Phaser.Scene {
     q(TEX.pellet, s.pellet);
     q(TEX.power, s.powerPellet);
     q(TEX.frightened, s.frightened);
+    q(TEX.fruit, s.fruit);
     q(TEX.mazeBg, s.mazeBackground);
     q(TEX.attractBg, s.attractBackground);
     q(TEX.logo, this.theme.branding.logo);

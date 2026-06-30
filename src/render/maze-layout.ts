@@ -48,6 +48,9 @@ export const MAZE_LAYOUT: ReadonlyArray<string> = build();
 
 export const PLAYER_SPAWN: Vec2 = { x: 9, y: 15 };
 
+/** Onde a fruta aparece — logo abaixo do centro (casa dos fantasmas). */
+export const FRUIT_POSITION: Vec2 = { x: 9, y: 11 };
+
 export interface GhostSpawn {
   personality: Personality;
   position: Vec2;

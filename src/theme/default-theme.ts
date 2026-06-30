@@ -42,6 +42,7 @@ export const DEFAULT_THEME: Theme = {
     pellet: null,
     powerPellet: null,
     frightened: null,
+    fruit: null,
     ghosts: { blinky: null, pinky: null, inky: null, clyde: null },
     mazeBackground: null,
     attractBackground: null,

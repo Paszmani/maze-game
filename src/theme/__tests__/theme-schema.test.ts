@@ -120,6 +120,11 @@ describe('resolveTheme — sprites', () => {
     const t = resolveTheme({ sprites: { player: 123 } });
     expect(t.sprites.player).toBeNull();
   });
+
+  it('aceita o sprite da fruta', () => {
+    expect(resolveTheme({ sprites: { fruit: 'cereja.png' } }).sprites.fruit).toBe('cereja.png');
+    expect(resolveTheme({}).sprites.fruit).toBeNull();
+  });
 });
 
 describe('resolveTheme — attract (estilo)', () => {

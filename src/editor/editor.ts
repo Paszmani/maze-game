@@ -46,7 +46,7 @@ interface Draft {
   branding: { attractHeadline: string; ctaButton: string; leadHeadline: string; logo: string };
   gameplay: { playerSpeed: number; ghostSpeed: number; powerDurationMs: number };
   sprites: {
-    player: string; pellet: string; powerPellet: string; frightened: string;
+    player: string; pellet: string; powerPellet: string; frightened: string; fruit: string;
     ghosts: Quad; mazeBackground: string; attractBackground: string;
   };
   attract: DraftAttract;
@@ -64,7 +64,7 @@ function makeDraft(): Draft {
     },
     branding: { attractHeadline: 'DESVIE. COLETE. VENÇA.', ctaButton: 'TOCAR PARA JOGAR', leadHeadline: 'Cadastre-se e concorra a um brinde!', logo: '' },
     gameplay: { playerSpeed: 1.0, ghostSpeed: 0.9, powerDurationMs: 6000 },
-    sprites: { player: '', pellet: '', powerPellet: '', frightened: '', ghosts: ['', '', '', ''], mazeBackground: '', attractBackground: '' },
+    sprites: { player: '', pellet: '', powerPellet: '', frightened: '', fruit: '', ghosts: ['', '', '', ''], mazeBackground: '', attractBackground: '' },
     attract: {
       showPlayer: true,
       title: { visible: true, color: '#e30613', size: 24, y: 0.2 },
@@ -187,6 +187,7 @@ const COLOR_FIELDS: { key: Exclude<keyof Draft['colors'], 'ghosts'>; label: stri
 const SPRITE_FIELDS: { key: Exclude<keyof Draft['sprites'], 'ghosts'>; label: string }[] = [
   { key: 'player', label: 'Player' }, { key: 'pellet', label: 'Pellet' },
   { key: 'powerPellet', label: 'Power-pellet' }, { key: 'frightened', label: 'Frightened' },
+  { key: 'fruit', label: 'Fruta' },
   { key: 'mazeBackground', label: 'Fundo do jogo' }, { key: 'attractBackground', label: 'Fundo da Attract' },
 ];
 

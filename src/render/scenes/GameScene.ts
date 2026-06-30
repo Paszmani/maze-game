@@ -22,7 +22,7 @@ import { GameState } from '../../core/game-state.js';
 import { Direction } from '../../core/direction.js';
 import { TouchControls } from '../input/touch-controls.js';
 import { InactivityMonitor, inactivityMs } from '../input/inactivity.js';
-import { MAZE_LAYOUT, PLAYER_SPAWN, GHOST_SPAWNS } from '../maze-layout.js';
+import { MAZE_LAYOUT, PLAYER_SPAWN, GHOST_SPAWNS, FRUIT_POSITION } from '../maze-layout.js';
 import { TILE, INACTIVITY_MS } from '../constants.js';
 import { numberToCss } from '../theme-loader.js';
 import { TEX } from '../textures.js';
@@ -43,6 +43,7 @@ export class GameScene extends Phaser.Scene {
   // Imagens de sprite, quando o tema as fornece. `null` => desenha forma primitiva.
   private playerImg: Phaser.GameObjects.Image | null = null;
   private ghostImgs: Array<{ img: Phaser.GameObjects.Image | null; base: string }> = [];
+  private fruitImg: Phaser.GameObjects.Image | null = null;
 
   constructor() {
     super('game');
@@ -82,6 +83,7 @@ export class GameScene extends Phaser.Scene {
         playerSpeed: this.theme.gameplay.playerSpeed,
         ghostSpeed: this.theme.gameplay.ghostSpeed,
         powerDurationMs: this.theme.gameplay.powerDurationMs,
+        fruitPosition: { ...FRUIT_POSITION },
         ...(Number.isFinite(livesOverride) && livesOverride > 0 ? { startingLives: livesOverride } : {}),
       },
     });
@@ -107,6 +109,8 @@ export class GameScene extends Phaser.Scene {
         : null;
     this.playerImg = sprite(TEX.player);
     this.ghostImgs = ghosts.map((gh) => ({ img: sprite(TEX.ghost(gh.personality)), base: TEX.ghost(gh.personality) }));
+    this.fruitImg = sprite(TEX.fruit);
+    this.fruitImg?.setVisible(false);
 
     this.hud = this.add.text(8, maze.height * TILE + 12, '', {
       fontFamily: 'monospace',
@@ -155,7 +159,47 @@ export class GameScene extends Phaser.Scene {
 
     this.drawPellets();
     this.drawActors();
+    this.drawFruit();
     this.drawHud();
+    this.spawnPopups();
+  }
+
+  // --- Fruta e popups ----------------------------------------------------
+
+  private drawFruit(): void {
+    const fruit = this.state.fruit;
+    if (this.fruitImg) {
+      if (fruit) this.fruitImg.setVisible(true).setPosition(this.center(fruit.position.x), this.center(fruit.position.y));
+      else this.fruitImg.setVisible(false);
+    } else if (fruit) {
+      // Sem sprite: desenha um coletavel primitivo (no actorsGfx, ja limpo neste frame).
+      this.actorsGfx.fillStyle(this.theme.colors.power, 1);
+      this.actorsGfx.fillCircle(this.center(fruit.position.x), this.center(fruit.position.y), TILE * 0.3);
+      this.actorsGfx.lineStyle(2, this.theme.colors.uiAccent, 1);
+      this.actorsGfx.strokeCircle(this.center(fruit.position.x), this.center(fruit.position.y), TILE * 0.3);
+    }
+  }
+
+  /** Texto "+N" subindo e sumindo ao comer fruta/fantasma. */
+  private spawnPopups(): void {
+    for (const popup of this.state.drainPopups()) {
+      const text = this.add
+        .text(this.center(popup.position.x), this.center(popup.position.y), `+${popup.value}`, {
+          fontFamily: 'monospace',
+          fontSize: '18px',
+          color: this.theme.colors.text,
+        })
+        .setOrigin(0.5)
+        .setDepth(20);
+      this.tweens.add({
+        targets: text,
+        y: text.y - TILE,
+        alpha: 0,
+        duration: 800,
+        ease: 'Cubic.easeOut',
+        onComplete: () => text.destroy(),
+      });
+    }
   }
 
   // --- Input -------------------------------------------------------------

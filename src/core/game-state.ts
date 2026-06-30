@@ -49,7 +49,21 @@ export interface GameConfig {
   elroyDots2: number;
   elroySpeed1: number;
   elroySpeed2: number;
+  /** Dots (do nivel) que fazem a fruta aparecer (classico: 70 e 170). */
+  fruitDotThresholds: number[];
+  /** Quanto tempo a fruta fica visivel antes de sumir (ms). */
+  fruitDurationMs: number;
+  /** Pontos da fruta. */
+  fruitValue: number;
+  /** Onde a fruta aparece (classico: logo abaixo da casa). */
+  fruitPosition: Vec2;
   schedule: ScatterChaseSchedule;
+}
+
+/** Popup de pontuacao para o render desenhar (ao comer fruta ou fantasma). */
+export interface ScorePopup {
+  value: number;
+  position: Vec2;
 }
 
 export const DEFAULT_CONFIG: Omit<GameConfig, 'schedule'> = {
@@ -68,6 +82,10 @@ export const DEFAULT_CONFIG: Omit<GameConfig, 'schedule'> = {
   elroyDots2: 10,
   elroySpeed1: 1.05,
   elroySpeed2: 1.1,
+  fruitDotThresholds: [70, 170],
+  fruitDurationMs: 9_500,
+  fruitValue: 100,
+  fruitPosition: { x: 9, y: 11 },
 };
 
 /**
@@ -139,6 +157,13 @@ export class GameState {
   private releaseTimerMs = 0;
   private readonly returned = new Set<Personality>();
 
+  // Fruta: dots totais do nivel (persistem entre mortes), estado e popups.
+  private totalDots = 0;
+  private fruitActive = false;
+  private fruitRemainingMs = 0;
+  private fruitSpawnedCount = 0;
+  private pendingPopups: ScorePopup[] = [];
+
   private playerAcc = 0;
   private ghostAccs: number[];
 
@@ -185,6 +210,18 @@ export class GameState {
     return this.dotsEaten;
   }
 
+  /** Fruta ativa (posicao + valor) ou `null`. O render desenha; o teste verifica. */
+  get fruit(): { position: Vec2; value: number } | null {
+    return this.fruitActive ? { position: this.config.fruitPosition, value: this.config.fruitValue } : null;
+  }
+
+  /** Devolve e limpa os popups de pontuacao pendentes (o render os consome). */
+  drainPopups(): ScorePopup[] {
+    const out = this.pendingPopups;
+    this.pendingPopups = [];
+    return out;
+  }
+
   // --- Transicoes de fase ------------------------------------------------
 
   /** Inicia uma partida nova: zera tudo e vai para `playing`. */
@@ -195,6 +232,9 @@ export class GameState {
     this.extraLifeAwarded = false;
     this.scoring.reset();
     this.pellets.reset();
+    this.totalDots = this.pellets.remaining();
+    this.fruitSpawnedCount = 0;
+    this.pendingPopups = [];
     this.frightenedRemainingMs = 0;
     this.scheduleElapsedMs = 0;
     this.resetEntities();
@@ -213,6 +253,7 @@ export class GameState {
     this.advanceFrightened(dtMs);
     this.advanceSchedule(dtMs);
     this.updateHouse(dtMs);
+    this.updateFruit(dtMs);
 
     this.movePlayer(dtMs);
     if (this.phase !== 'playing' || this.resetPending) return;
@@ -245,6 +286,23 @@ export class GameState {
         this.releaseTimerMs = 0;
       }
       break;
+    }
+  }
+
+  // --- Fruta (coletavel bonus) -------------------------------------------
+
+  private updateFruit(dtMs: number): void {
+    if (this.fruitActive) {
+      this.fruitRemainingMs -= dtMs;
+      if (this.fruitRemainingMs <= 0) this.fruitActive = false; // expirou
+    }
+    // Dots do nivel (persistem entre mortes) atingiram o proximo limiar?
+    const levelDots = this.totalDots - this.pellets.remaining();
+    const next = this.config.fruitDotThresholds[this.fruitSpawnedCount];
+    if (next !== undefined && levelDots >= next) {
+      this.fruitActive = true;
+      this.fruitRemainingMs = this.config.fruitDurationMs;
+      this.fruitSpawnedCount += 1;
     }
   }
 
@@ -353,6 +411,12 @@ export class GameState {
       this.scoring.eatPowerPellet();
       this.enterFrightened();
     }
+    // Fruta na celula do jogador.
+    if (this.fruitActive && equalsVec(this.player.position, this.config.fruitPosition)) {
+      this.scoring.score += this.config.fruitValue;
+      this.pendingPopups.push({ value: this.config.fruitValue, position: { ...this.config.fruitPosition } });
+      this.fruitActive = false;
+    }
     this.checkExtraLife();
     if (this.pellets.isCleared()) {
       this.phase = 'gameover';
@@ -364,7 +428,8 @@ export class GameState {
     for (const g of this.ghosts) {
       if (!equalsVec(this.player.position, g.position)) continue;
       if (g.mode === 'frightened') {
-        this.scoring.eatGhost();
+        const pts = this.scoring.eatGhost();
+        this.pendingPopups.push({ value: pts, position: { ...g.position } });
         g.setMode('eaten');
       } else if (g.mode === 'eaten') {
         // So os olhos voltando para casa — nao machuca ninguem.
@@ -413,6 +478,8 @@ export class GameState {
     this.dotsEaten = 0;
     this.releaseTimerMs = 0;
     this.returned.clear();
+    // Fruta ativa some ao perder a vida (mas o contador de nivel persiste).
+    this.fruitActive = false;
     this.playerAcc = 0;
     this.ghostAccs = this.ghosts.map(() => 0);
   }
