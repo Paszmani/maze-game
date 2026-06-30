@@ -222,6 +222,22 @@ export class GameState {
     return out;
   }
 
+  /**
+   * Fracao (0..1) do jogador rumo a proxima celula — so para o render interpolar
+   * (a logica continua discreta). O render desenha em `position + progresso*dir`.
+   */
+  get playerProgress(): number {
+    return this.playerInterval > 0 ? Math.min(1, this.playerAcc / this.playerInterval) : 0;
+  }
+
+  /** Idem para um fantasma. Fantasma na casa fica com progresso 0 (parado). */
+  ghostProgress(index: number): number {
+    const g = this.ghosts[index];
+    if (!g || g.houseState === 'inside') return 0;
+    const interval = this.ghostInterval(g);
+    return interval > 0 ? Math.min(1, (this.ghostAccs[index] ?? 0) / interval) : 0;
+  }
+
   // --- Transicoes de fase ------------------------------------------------
 
   /** Inicia uma partida nova: zera tudo e vai para `playing`. */

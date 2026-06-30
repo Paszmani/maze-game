@@ -19,7 +19,7 @@ import { Pellets } from '../../core/pellets.js';
 import { Player } from '../../core/player.js';
 import { Ghost } from '../../core/ghost-ai.js';
 import { GameState } from '../../core/game-state.js';
-import { Direction } from '../../core/direction.js';
+import { Direction, type Vec2 } from '../../core/direction.js';
 import { TouchControls } from '../input/touch-controls.js';
 import { InactivityMonitor, inactivityMs } from '../input/inactivity.js';
 import { MAZE_LAYOUT, PLAYER_SPAWN, GHOST_SPAWNS, FRUIT_POSITION } from '../maze-layout.js';
@@ -44,6 +44,7 @@ export class GameScene extends Phaser.Scene {
   private playerImg: Phaser.GameObjects.Image | null = null;
   private ghostImgs: Array<{ img: Phaser.GameObjects.Image | null; base: string }> = [];
   private fruitImg: Phaser.GameObjects.Image | null = null;
+  private now = 0;
 
   constructor() {
     super('game');
@@ -149,7 +150,8 @@ export class GameScene extends Phaser.Scene {
     if (this.state.phase === 'gameover') this.scene.start('lead', { score: this.state.score });
   }
 
-  override update(_time: number, delta: number): void {
+  override update(time: number, delta: number): void {
+    this.now = time;
     this.readInput();
     this.inactivity.update();
 
@@ -232,9 +234,11 @@ export class GameScene extends Phaser.Scene {
   private drawPellets(): void {
     const g = this.pelletsGfx;
     g.clear();
+    const showPower = this.now % 400 < 280; // power-pellets piscam
     for (let y = 0; y < this.state.maze.height; y++) {
       for (let x = 0; x < this.state.maze.width; x++) {
         if (this.state.pellets.hasPowerPellet(x, y)) {
+          if (!showPower) continue;
           g.fillStyle(this.theme.colors.power, 1);
           g.fillCircle(this.center(x), this.center(y), TILE * 0.32);
         } else if (this.state.pellets.hasPellet(x, y)) {
@@ -245,30 +249,53 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Pixel interpolado: `cell` deslizando `progress` rumo a celula seguinte. */
+  private interpCenter(cell: Vec2, dir: Direction, progress: number): { x: number; y: number } {
+    const base = { x: this.center(cell.x), y: this.center(cell.y) };
+    if (progress <= 0 || dir === Direction.None) return base;
+    const next = this.state.maze.step(cell, dir);
+    if (!next) return base; // bloqueado: nao desliza pra dentro da parede
+    if (Math.abs(next.x - cell.x) > 1 || Math.abs(next.y - cell.y) > 1) return base; // tunel: snap
+    return {
+      x: base.x + (this.center(next.x) - base.x) * progress,
+      y: base.y + (this.center(next.y) - base.y) * progress,
+    };
+  }
+
+  private dirAngle(dir: Direction): number {
+    if (dir === Direction.Down) return 90;
+    if (dir === Direction.Left) return 180;
+    if (dir === Direction.Up) return 270;
+    return 0;
+  }
+
   private drawActors(): void {
     const g = this.actorsGfx;
     g.clear();
 
-    // Jogador: imagem se houver, senao circulo.
-    const p = this.state.player.position;
+    // Jogador (posicao interpolada).
+    const player = this.state.player;
+    const pp = this.interpCenter(player.position, player.direction, this.state.playerProgress);
     if (this.playerImg) {
-      this.playerImg.setPosition(this.center(p.x), this.center(p.y));
+      this.playerImg.setPosition(pp.x, pp.y).setAngle(this.dirAngle(player.direction));
     } else {
-      g.fillStyle(this.theme.colors.player, 1);
-      g.fillCircle(this.center(p.x), this.center(p.y), TILE * 0.42);
+      this.drawPacman(pp.x, pp.y, player.direction);
     }
 
     this.state.ghosts.forEach((ghost, i) => {
-      const cx = this.center(ghost.position.x);
-      const cy = this.center(ghost.position.y);
+      let pos = this.interpCenter(ghost.position, ghost.direction, this.state.ghostProgress(i));
+      // Bob vertical enquanto espera na casa.
+      if (ghost.houseState === 'inside') {
+        pos = { x: this.center(ghost.position.x), y: this.center(ghost.position.y) + Math.sin(this.now * 0.005) * 3 };
+      }
+      const flash = ghost.mode === 'frightened' && this.state.frightenedRemainingMs < 2000 && this.now % 250 < 125;
       const ref = this.ghostImgs[i];
 
       if (ref?.img) {
-        ref.img.setPosition(cx, cy).setVisible(true).setAlpha(1).clearTint();
+        ref.img.setPosition(pos.x, pos.y).setVisible(true).setAlpha(1).clearTint();
         if (ghost.mode === 'frightened') {
-          // Sprite de frightened dedicado, ou tinge o proprio sprite de azul.
           if (this.textures.exists(TEX.frightened)) ref.img.setTexture(TEX.frightened);
-          else ref.img.setTexture(ref.base).setTint(this.theme.colors.frightened);
+          else ref.img.setTexture(ref.base).setTint(flash ? 0xffffff : this.theme.colors.frightened);
         } else {
           ref.img.setTexture(ref.base);
           if (ghost.mode === 'eaten') ref.img.setAlpha(0.4);
@@ -276,14 +303,28 @@ export class GameScene extends Phaser.Scene {
       } else {
         const color =
           ghost.mode === 'frightened'
-            ? this.theme.colors.frightened
+            ? flash
+              ? 0xffffff
+              : this.theme.colors.frightened
             : ghost.mode === 'eaten'
               ? this.theme.colors.eaten
               : this.theme.colors.ghosts[ghost.personality];
         g.fillStyle(color, 1);
-        g.fillCircle(cx, cy, TILE * 0.42);
+        g.fillCircle(pos.x, pos.y, TILE * 0.42);
       }
     });
+  }
+
+  /** Pac-Man primitivo com boca animada, apontando na direcao do movimento. */
+  private drawPacman(x: number, y: number, dir: Direction): void {
+    const g = this.actorsGfx;
+    const r = TILE * 0.42;
+    const open = (Math.sin(this.now * 0.012) + 1) / 2; // 0..1
+    const mouth = Phaser.Math.DegToRad(6 + open * 34);
+    const a = Phaser.Math.DegToRad(this.dirAngle(dir));
+    g.fillStyle(this.theme.colors.player, 1);
+    g.slice(x, y, r, a + mouth, a + Math.PI * 2 - mouth, false);
+    g.fillPath();
   }
 
   private drawHud(): void {
