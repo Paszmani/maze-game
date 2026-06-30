@@ -77,6 +77,9 @@ export function chaseTarget(
     case 'blinky':
       return ctx.pacman;
     case 'pinky':
+      // 4 celulas a frente do Pac-Man. NAO replicamos o "bug do up" do arcade
+      // (quando o Pac-Man olha pra cima, o alvo iria 4 acima + 4 a esquerda):
+      // para um jogo de evento, previsivel e justo e melhor que fiel ao bug.
       return ahead(ctx.pacman, ctx.pacmanDir, 4);
     case 'inky': {
       const pivot = ahead(ctx.pacman, ctx.pacmanDir, 2);

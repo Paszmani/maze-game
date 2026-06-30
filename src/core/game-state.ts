@@ -42,6 +42,13 @@ export interface GameConfig {
   dotLimits: Record<Personality, number>;
   /** Sem comer dot por este tempo, libera o proximo fantasma (anti-trava). */
   releaseFallbackMs: number;
+  /** Fator (<1) que deixa o fantasma mais lento dentro do tunel. */
+  tunnelSpeedFactor: number;
+  /** Cruise Elroy: Blinky acelera quando faltam <= elroyDots1 / <= elroyDots2. */
+  elroyDots1: number;
+  elroyDots2: number;
+  elroySpeed1: number;
+  elroySpeed2: number;
   schedule: ScatterChaseSchedule;
 }
 
@@ -56,7 +63,39 @@ export const DEFAULT_CONFIG: Omit<GameConfig, 'schedule'> = {
   // Blinky e Pinky comecam fora; Inky sai aos 30 dots, Clyde aos 60.
   dotLimits: { blinky: 0, pinky: 0, inky: 30, clyde: 60 },
   releaseFallbackMs: 4_000,
+  tunnelSpeedFactor: 0.5,
+  elroyDots1: 20,
+  elroyDots2: 10,
+  elroySpeed1: 1.05,
+  elroySpeed2: 1.1,
 };
+
+/**
+ * Velocidade efetiva de um fantasma (fracao da base), pura e testavel:
+ * frightened mais lento, olhos (eaten) bem rapidos, Blinky em Cruise Elroy
+ * acelera quando faltam poucos dots, e todos (menos olhos) lentos no tunel.
+ */
+export function effectiveGhostSpeed(
+  config: Pick<
+    GameConfig,
+    'ghostSpeed' | 'frightenedSpeedFactor' | 'tunnelSpeedFactor' | 'elroyDots1' | 'elroyDots2' | 'elroySpeed1' | 'elroySpeed2'
+  >,
+  ghost: Pick<Ghost, 'mode' | 'personality'>,
+  pelletsRemaining: number,
+  inTunnel: boolean,
+): number {
+  let speed = config.ghostSpeed;
+  if (ghost.mode === 'frightened') {
+    speed = config.ghostSpeed * config.frightenedSpeedFactor;
+  } else if (ghost.mode === 'eaten') {
+    speed = config.ghostSpeed * 2;
+  } else if (ghost.personality === 'blinky') {
+    if (pelletsRemaining <= config.elroyDots2) speed *= config.elroySpeed2;
+    else if (pelletsRemaining <= config.elroyDots1) speed *= config.elroySpeed1;
+  }
+  if (ghost.mode !== 'eaten' && inTunnel) speed *= config.tunnelSpeedFactor;
+  return speed;
+}
 
 export interface GameStateInit {
   maze: Maze;
@@ -104,9 +143,6 @@ export class GameState {
   private ghostAccs: number[];
 
   private readonly playerInterval: number;
-  private readonly ghostBaseInterval: number;
-  private readonly ghostFrightInterval: number;
-  private readonly ghostEatenInterval: number;
 
   private readonly playerSpawn: PlayerSpawn;
   private readonly ghostSpawns: GhostSpawn[];
@@ -125,11 +161,7 @@ export class GameState {
     };
     this.lives = this.config.startingLives;
 
-    const { baseStepMs, playerSpeed, ghostSpeed, frightenedSpeedFactor } = this.config;
-    this.playerInterval = baseStepMs / playerSpeed;
-    this.ghostBaseInterval = baseStepMs / ghostSpeed;
-    this.ghostFrightInterval = baseStepMs / (ghostSpeed * frightenedSpeedFactor);
-    this.ghostEatenInterval = baseStepMs / (ghostSpeed * 2);
+    this.playerInterval = this.config.baseStepMs / this.config.playerSpeed;
 
     this.playerSpawn = { position: { ...this.player.position }, direction: this.player.direction };
     this.ghostSpawns = this.ghosts.map((g) => ({
@@ -271,9 +303,8 @@ export class GameState {
   }
 
   private ghostInterval(g: Ghost): number {
-    if (g.mode === 'frightened') return this.ghostFrightInterval;
-    if (g.mode === 'eaten') return this.ghostEatenInterval;
-    return this.ghostBaseInterval;
+    const inTunnel = this.maze.isTunnel(g.position.x, g.position.y);
+    return this.config.baseStepMs / effectiveGhostSpeed(this.config, g, this.pellets.remaining(), inTunnel);
   }
 
   private moveGhosts(dtMs: number): void {
