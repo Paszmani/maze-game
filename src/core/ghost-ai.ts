@@ -27,6 +27,13 @@ import type { GhostMode } from './ghost-modes.js';
 
 export type Personality = 'blinky' | 'pinky' | 'inky' | 'clyde';
 
+/**
+ * Estado em relacao a casa dos fantasmas: `inside` = esperando ser liberado
+ * (nao roda IA, fica parado/bob); `out` = solto no labirinto rodando a IA.
+ * O game-state controla a transicao (contador de dots / fallback de tempo).
+ */
+export type HouseState = 'inside' | 'out';
+
 /** Fonte de aleatoriedade: retorna [0, 1). Injetavel para testes determinísticos. */
 export type Rng = () => number;
 
@@ -143,6 +150,7 @@ export interface GhostInit {
   readonly homeTarget: Vec2;
   readonly direction?: Direction;
   readonly mode?: GhostMode;
+  readonly houseState?: HouseState;
 }
 
 export class Ghost {
@@ -150,6 +158,8 @@ export class Ghost {
   position: Vec2;
   direction: Direction;
   mode: GhostMode;
+  /** `inside` enquanto espera na casa; `out` quando solto. Default `out`. */
+  houseState: HouseState;
   readonly scatterCorner: Vec2;
   readonly homeTarget: Vec2;
 
@@ -158,6 +168,7 @@ export class Ghost {
     this.position = init.position;
     this.direction = init.direction ?? Direction.None;
     this.mode = init.mode ?? 'scatter';
+    this.houseState = init.houseState ?? 'out';
     this.scatterCorner = init.scatterCorner;
     this.homeTarget = init.homeTarget;
   }

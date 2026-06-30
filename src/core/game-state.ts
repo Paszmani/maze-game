@@ -18,7 +18,7 @@
 import { Direction, equalsVec, type Vec2 } from './direction.js';
 import type { Maze } from './maze.js';
 import type { Player } from './player.js';
-import { type Ghost } from './ghost-ai.js';
+import { type Ghost, type Personality } from './ghost-ai.js';
 import { ScatterChaseSchedule, type BaseMode } from './ghost-modes.js';
 import { Pellets } from './pellets.js';
 import { Scoring } from './scoring.js';
@@ -38,6 +38,10 @@ export interface GameConfig {
   frightenedSpeedFactor: number;
   /** Pontuacao que concede uma vida extra (uma unica vez). `null` desativa. */
   extraLifeAt: number | null;
+  /** Dots comidos para liberar cada fantasma da casa (regra do arcade). */
+  dotLimits: Record<Personality, number>;
+  /** Sem comer dot por este tempo, libera o proximo fantasma (anti-trava). */
+  releaseFallbackMs: number;
   schedule: ScatterChaseSchedule;
 }
 
@@ -49,6 +53,9 @@ export const DEFAULT_CONFIG: Omit<GameConfig, 'schedule'> = {
   ghostSpeed: 0.9,
   frightenedSpeedFactor: 0.6,
   extraLifeAt: 10_000,
+  // Blinky e Pinky comecam fora; Inky sai aos 30 dots, Clyde aos 60.
+  dotLimits: { blinky: 0, pinky: 0, inky: 30, clyde: 60 },
+  releaseFallbackMs: 4_000,
 };
 
 export interface GameStateInit {
@@ -87,6 +94,11 @@ export class GameState {
   private scheduleElapsedMs = 0;
   private extraLifeAwarded = false;
   private resetPending = false;
+
+  // Casa dos fantasmas: contador de dots, timer de fallback e quem voltou comido.
+  private dotsEaten = 0;
+  private releaseTimerMs = 0;
+  private readonly returned = new Set<Personality>();
 
   private playerAcc = 0;
   private ghostAccs: number[];
@@ -136,6 +148,11 @@ export class GameState {
     return this.frightenedRemainingMs > 0;
   }
 
+  /** Total de dots (pellets + power) comidos na vida atual. */
+  get dots(): number {
+    return this.dotsEaten;
+  }
+
   // --- Transicoes de fase ------------------------------------------------
 
   /** Inicia uma partida nova: zera tudo e vai para `playing`. */
@@ -163,11 +180,40 @@ export class GameState {
 
     this.advanceFrightened(dtMs);
     this.advanceSchedule(dtMs);
+    this.updateHouse(dtMs);
 
     this.movePlayer(dtMs);
     if (this.phase !== 'playing' || this.resetPending) return;
 
     this.moveGhosts(dtMs);
+  }
+
+  // --- Casa dos fantasmas (liberacao escalonada) -------------------------
+
+  /**
+   * Libera no maximo um fantasma por tick, na ordem da fila, quando seu limite de
+   * dots e atingido — ou pelo fallback de tempo (sem comer dot por X ms), que
+   * evita a casa travar. Fantasma que voltou comido (`returned`) sai imediato.
+   */
+  private updateHouse(dtMs: number): void {
+    this.releaseTimerMs += dtMs;
+    const order: ReadonlyArray<Personality> = ['blinky', 'pinky', 'inky', 'clyde'];
+    for (const p of order) {
+      const g = this.ghosts.find((gh) => gh.personality === p);
+      if (!g || g.houseState !== 'inside') continue;
+      // Primeiro da fila esperando: libera se pronto, e para por aqui (um por vez).
+      const ready =
+        this.returned.has(p) ||
+        this.dotsEaten >= this.config.dotLimits[p] ||
+        this.releaseTimerMs >= this.config.releaseFallbackMs;
+      if (ready) {
+        g.houseState = 'out';
+        g.mode = this.currentBaseMode();
+        this.returned.delete(p);
+        this.releaseTimerMs = 0;
+      }
+      break;
+    }
   }
 
   // --- Tempo: frightened e cronograma ------------------------------------
@@ -197,7 +243,7 @@ export class GameState {
     const after = this.currentBaseMode();
     if (after === before) return;
     for (const g of this.ghosts) {
-      if (g.mode === 'scatter' || g.mode === 'chase') g.setMode(after);
+      if (g.houseState === 'out' && (g.mode === 'scatter' || g.mode === 'chase')) g.setMode(after);
     }
   }
 
@@ -205,7 +251,8 @@ export class GameState {
     this.frightenedRemainingMs = this.config.powerDurationMs;
     this.scoring.resetGhostChain();
     for (const g of this.ghosts) {
-      if (g.mode === 'scatter' || g.mode === 'chase') g.setMode('frightened');
+      // Fantasma dentro da casa nao fica assustado.
+      if (g.houseState === 'out' && (g.mode === 'scatter' || g.mode === 'chase')) g.setMode('frightened');
     }
   }
 
@@ -232,6 +279,7 @@ export class GameState {
   private moveGhosts(dtMs: number): void {
     for (let i = 0; i < this.ghosts.length; i++) {
       const g = this.ghosts[i]!;
+      if (g.houseState === 'inside') continue; // esperando na casa: nao se move
       let acc = this.ghostAccs[i]! + dtMs;
       while (acc >= this.ghostInterval(g)) {
         acc -= this.ghostInterval(g);
@@ -243,7 +291,12 @@ export class GameState {
           this.rng,
         );
         if (g.mode === 'eaten' && equalsVec(g.position, g.homeTarget)) {
-          g.setMode(this.currentBaseMode());
+          // Voltou comido para a casa: vira a esperar e e re-liberado pelo mecanismo.
+          g.houseState = 'inside';
+          this.returned.add(g.personality);
+          g.mode = this.currentBaseMode();
+          this.ghostAccs[i] = 0;
+          break;
         }
         this.checkCollisions();
         if (this.phase !== 'playing' || this.resetPending) {
@@ -260,6 +313,10 @@ export class GameState {
   private eatAtPlayer(): void {
     const { x, y } = this.player.position;
     const kind = this.pellets.consume(x, y);
+    if (kind === 'pellet' || kind === 'power') {
+      this.dotsEaten += 1;
+      this.releaseTimerMs = 0; // comeu dot -> reseta o fallback de tempo
+    }
     if (kind === 'pellet') this.scoring.eatPellet();
     else if (kind === 'power') {
       this.scoring.eatPowerPellet();
@@ -318,7 +375,13 @@ export class GameState {
       g.position = { ...spawn.position };
       g.direction = spawn.direction;
       g.mode = spawn.mode;
+      // Limite 0 (Blinky/Pinky) comeca fora; os demais esperam na casa.
+      g.houseState = this.config.dotLimits[g.personality] === 0 ? 'out' : 'inside';
     });
+    // A casa reinicia a cada vida: zera dots/timer e quem havia voltado comido.
+    this.dotsEaten = 0;
+    this.releaseTimerMs = 0;
+    this.returned.clear();
     this.playerAcc = 0;
     this.ghostAccs = this.ghosts.map(() => 0);
   }
