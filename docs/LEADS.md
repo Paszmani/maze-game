@@ -9,7 +9,21 @@ formulário (ex.: `name`, `email`, `phone`).
 
 ---
 
-## Desktop (Electron / `.exe`)
+## Botão "📂 Leads" no editor (mais rápido, nas duas plataformas)
+
+Na tela inicial do jogo, abra ⚙ **Personalizar** — o topo do editor tem um botão
+**📂 Leads** (só aparece rodando no Electron ou no Android, não no navegador).
+
+- **Electron:** abre a pasta `data/leads/` direto no Explorador do Windows.
+- **Android:** abre a folha nativa de compartilhamento com o `leads.csv` — mande
+  por e-mail, Google Drive, WhatsApp etc. direto do tablet/totem, sem precisar
+  de cabo ou computador por perto.
+
+Se ainda não houver nenhum cadastro salvo, o botão avisa em vez de abrir vazio.
+
+---
+
+## Desktop (Electron / `.exe`) — caminho manual
 
 Os leads ficam em disco, **ao lado do `.exe`**, na pasta:
 
@@ -30,7 +44,7 @@ Passo a passo:
 
 ---
 
-## Android (APK)
+## Android (APK) — caminho manual
 
 Os leads ficam no armazenamento **externo do app** (acessível por USB / gerenciador
 de arquivos), na pasta:

@@ -1,4 +1,4 @@
-# Totem Android (Capacitor)
+# Maze Game — Android (Capacitor)
 
 O mesmo jogo web (`dist/`) empacotado num APK offline. O totem Windows continua
 no Electron; os dois compartilham o `dist/`. A ponte nativa (`window.kiosk`) é
@@ -27,8 +27,18 @@ cd android && ./gradlew assembleDebug      # APK em app/build/outputs/apk/debug/
 
 Instale o APK no aparelho (`adb install` ou copiando o arquivo).
 
-## Onde ficam os dados (no aparelho)
+Depois de adicionar o plugin `@capacitor/share` (usado no botão de extrair leads
+abaixo), rode `npm run android:sync` de novo antes de reabrir o Android Studio —
+é o que registra o plugin nativo no projeto.
 
+## Extrair o CSV de leads
+
+**Pelo app (recomendado):** na tela inicial, ⚙ **Personalizar** → botão **📂
+Leads** no topo do editor. Abre a folha nativa de compartilhamento do Android com
+o `leads.csv` — mande por e-mail, Drive, WhatsApp etc. direto do tablet. Se ainda
+não houver nenhum lead salvo, o botão avisa.
+
+**Por USB / gerenciador de arquivos (alternativa manual):**
 `Directory.External` → `/Android/data/com.gsb.kioskmaze/files/`:
 
 ```
@@ -38,27 +48,14 @@ leads/leads.csv          consolidado
 leads/raw/<...>.json      1 por lead
 ```
 
-Acessível por USB / gerenciador de arquivos para o operador copiar os leads.
 Crie o `config.json` aí (ou deixe o padrão: tema `gsb-default`, terminal `totem-01`).
 
-## Lockdown (dois níveis)
+## Sem lockdown
 
-**1. Fixação de tela (já funciona, sem configuração).**
-A `MainActivity` chama `startLockTask()` + tela cheia imersiva + tela sempre
-ligada. Trava o app, mas é escapável segurando **Voltar + Recentes**. Suficiente
-para estande supervisionado.
+O app roda em tela cheia imersiva e mantém a tela ligada, mas **não trava** o
+usuário nele — dá para sair normalmente (Home/Recentes). Se precisar de kiosk de
+verdade no futuro (screen pinning ou device-owner), me avise que eu reintroduzo.
 
-**2. Kiosk total (device-owner — opcional, avançado).**
-Para travar de verdade (sem escapar), o app precisa ser *device owner* num
-aparelho recém-resetado (sem conta Google):
-
-```
-adb shell dpm set-device-owner com.gsb.kioskmaze/.AdminReceiver
-```
-
-Isso exige um `DeviceAdminReceiver` no app (ainda não incluído). Se quiser esse
-nível, me peça que eu adiciono o receiver + o XML de admin.
-
-> Lembrete: o botão **⚙ Personalizar** na tela inicial abre o editor de tema. No
-> totem isso fica visível para qualquer um — dá para esconder atrás de um gesto se
-> preferir acesso só do operador.
+> Lembrete: o botão **⚙ Personalizar** na tela inicial abre o editor de tema. Fica
+> visível para qualquer um — dá para esconder atrás de um gesto se preferir acesso
+> só do operador.

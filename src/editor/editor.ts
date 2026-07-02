@@ -498,6 +498,21 @@ if (kiosk) {
   });
 }
 
+// No totem, botao para o operador extrair os leads: Electron abre a pasta no
+// explorador; Android abre a folha de compartilhamento com o CSV (nao ha
+// "explorador" no app — compartilhar por e-mail/Drive/WhatsApp e o caminho real).
+const leadsBtn = document.getElementById('reveal-leads') as HTMLButtonElement;
+if (kiosk) {
+  leadsBtn.style.display = '';
+  leadsBtn.addEventListener('click', async () => {
+    try {
+      await kiosk.revealLeads();
+    } catch {
+      alert('Não foi possível abrir os leads (ainda não há nenhum cadastro salvo?).');
+    }
+  });
+}
+
 (document.getElementById('import') as HTMLInputElement).addEventListener('change', async (e) => {
   const file = (e.target as HTMLInputElement).files?.[0];
   if (!file) return;

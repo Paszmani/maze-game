@@ -15,6 +15,7 @@
 
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import type { KioskBridge } from '../shell/bridge.js';
 import type { Lead } from '../data/lead-store.js';
 import { leadsToCsv } from '../data/csv-export.js';
@@ -129,8 +130,25 @@ export function makeCapacitorBridge(): KioskBridge {
     },
 
     async revealLeads() {
-      // No Android os leads ficam em /Android/data/<appId>/files/leads (acessivel por USB).
-      // Sem visualizador embutido aqui.
+      // Android nao tem "abrir a pasta no explorador" como o desktop — o caminho
+      // real e COMPARTILHAR o CSV (e-mail/Drive/WhatsApp) direto do tablet.
+      // O CSV mora em Directory.External, que o FileProvider do Capacitor nao
+      // expoe por padrao; copia para Directory.Cache (sempre compartilhavel) e
+      // pede a URI de conteudo antes de abrir a folha nativa de compartilhamento.
+      const csv = await Filesystem.readFile({ path: 'leads/leads.csv', directory: DIR, encoding: Encoding.UTF8 });
+      const exportPath = 'leads-export.csv';
+      await Filesystem.writeFile({
+        path: exportPath,
+        directory: Directory.Cache,
+        data: csv.data as string,
+        encoding: Encoding.UTF8,
+      });
+      const { uri } = await Filesystem.getUri({ path: exportPath, directory: Directory.Cache });
+      await Share.share({
+        title: 'Leads do Maze Game',
+        url: uri,
+        dialogTitle: 'Compartilhar leads.csv',
+      });
     },
   };
 }
