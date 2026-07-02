@@ -8,19 +8,28 @@
 
 import { Direction, DIRECTION_VECTORS, isHorizontal, type Vec2 } from './direction.js';
 
-export type Tile = 'wall' | 'path' | 'tunnel';
+export type Tile = 'wall' | 'path' | 'tunnel' | 'door';
 
 /**
  * Legenda ASCII para autoria de labirintos em testes e temas:
  *   '#' = parede
  *   'T' = celula de tunel (caminhavel; permite wrap para o lado oposto da linha)
+ *   'D' = porta da casa dos fantasmas (bloqueada como parede no passo comum;
+ *         so atravessavel por `step(..., { throughDoor: true })` — usada nas
+ *         rotas roteirizadas de SAIDA do fantasma e de RETORNO dos olhos)
  *   qualquer outro caractere = caminho livre
  */
 const TILE_FROM_CHAR = (char: string): Tile => {
   if (char === '#') return 'wall';
   if (char === 'T') return 'tunnel';
+  if (char === 'D') return 'door';
   return 'path';
 };
+
+/** Opcoes de `step`. `throughDoor` permite atravessar a porta da casa. */
+export interface StepOptions {
+  throughDoor?: boolean;
+}
 
 export class Maze {
   readonly width: number;
@@ -68,26 +77,38 @@ export class Maze {
     return this.tileAt(x, y) === 'tunnel';
   }
 
-  /** Caminhavel = dentro do grid e nao-parede (caminho ou tunel). */
+  /** Porta da casa dos fantasmas — bloqueada no passo comum, so passa com throughDoor. */
+  isDoor(x: number, y: number): boolean {
+    return this.tileAt(x, y) === 'door';
+  }
+
+  /**
+   * Caminhavel no passo COMUM = dentro do grid, nao-parede e nao-porta. A porta
+   * so e transponivel pelas rotas de fantasma (saida/retorno), nunca pelo jogador
+   * nem pela IA normal.
+   */
   isWalkable(x: number, y: number): boolean {
-    return this.inBounds(x, y) && !this.isWall(x, y);
+    return this.inBounds(x, y) && !this.isWall(x, y) && !this.isDoor(x, y);
   }
 
   /**
    * Proxima celula caminhavel saindo de `from` na direcao `dir`.
    *
-   * Retorna `null` se o passo for bloqueado (parede ou borda nao-tunel).
-   * Em uma celula de tunel, sair horizontalmente pela borda faz wrap para a
-   * celula da borda oposta na mesma linha (se ela for caminhavel).
+   * Retorna `null` se o passo for bloqueado (parede, porta, ou borda nao-tunel).
+   * `opts.throughDoor` libera a porta da casa (rota de fantasma). Em uma celula de
+   * tunel, sair horizontalmente pela borda faz wrap para a borda oposta na mesma
+   * linha (se caminhavel).
    */
-  step(from: Vec2, dir: Direction): Vec2 | null {
+  step(from: Vec2, dir: Direction, opts: StepOptions = {}): Vec2 | null {
     if (dir === Direction.None) return null;
 
     const delta = DIRECTION_VECTORS[dir];
     const target: Vec2 = { x: from.x + delta.x, y: from.y + delta.y };
 
     if (this.inBounds(target.x, target.y)) {
-      return this.isWall(target.x, target.y) ? null : target;
+      if (this.isWall(target.x, target.y)) return null;
+      if (this.isDoor(target.x, target.y) && !opts.throughDoor) return null;
+      return target;
     }
 
     // Fora do grid: so e valido como tunel (wrap horizontal a partir de uma celula de tunel).

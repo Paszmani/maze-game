@@ -3,7 +3,7 @@
   "name": "Meu Tema",
   "colors": {
     "maze": "#e60000",
-    "background": "#000010",
+    "background": "#000000",
     "pellet": "#ffffff",
     "power": "#ffcc00",
     "player": "#ffcc00",
@@ -25,7 +25,7 @@
   },
   "gameplay": {
     "playerSpeed": 1,
-    "ghostSpeed": 0.9,
+    "ghostSpeed": 0.6,
     "powerDurationMs": 6000
   },
   "attract": {

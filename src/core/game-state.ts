@@ -26,10 +26,17 @@ import type { Rng } from './ghost-ai.js';
 
 export type GamePhase = 'attract' | 'playing' | 'gameover';
 
+/** Ordem de expansao do BFS (retorno dos olhos). Qualquer ordem da caminho minimo. */
+const STEP_DIRS: readonly Direction[] = [Direction.Up, Direction.Down, Direction.Left, Direction.Right];
+
 export interface GameConfig {
   startingLives: number;
   /** Duracao do frightened apos uma power-pellet (ms). Vem de theme.gameplay. */
   powerDurationMs: number;
+  /** Ao morrer: tempo com o jogador SUMIDO (tudo congelado) antes do respawn. */
+  deathHideMs: number;
+  /** Depois do respawn: tempo com tudo VISIVEL e congelado ("pronto") antes de seguir. */
+  readyMs: number;
   /** Tempo-base para o jogador andar uma celula (ms) a velocidade 1.0. */
   baseStepMs: number;
   playerSpeed: number;
@@ -57,6 +64,15 @@ export interface GameConfig {
   fruitValue: number;
   /** Onde a fruta aparece (classico: logo abaixo da casa). */
   fruitPosition: Vec2;
+  /**
+   * Casa dos fantasmas (caixa fisica): celulas internas (sem pellets), a porta e
+   * a celula-saida logo acima dela. Um fantasma liberado e roteirizado ate a
+   * saida (sobe pela porta) antes de a IA assumir — evita que a regra greedy o
+   * prenda dentro da caixa concava. Vem do `maze-layout` via GameScene.
+   */
+  houseInterior: Vec2[];
+  houseDoor: Vec2;
+  houseExit: Vec2;
   schedule: ScatterChaseSchedule;
 }
 
@@ -69,7 +85,11 @@ export interface ScorePopup {
 export const DEFAULT_CONFIG: Omit<GameConfig, 'schedule'> = {
   startingLives: 3,
   powerDurationMs: 6_000,
-  baseStepMs: 150,
+  deathHideMs: 2_000,
+  readyMs: 2_000,
+  // 170ms/celula (~5.9 celulas/s): um passo mais calmo que o classico, melhor
+  // para totem com swipe. O movimento suave do render faz o resto.
+  baseStepMs: 170,
   playerSpeed: 1.0,
   ghostSpeed: 0.9,
   frightenedSpeedFactor: 0.6,
@@ -86,6 +106,14 @@ export const DEFAULT_CONFIG: Omit<GameConfig, 'schedule'> = {
   fruitDurationMs: 9_500,
   fruitValue: 100,
   fruitPosition: { x: 9, y: 11 },
+  // Casa default casada com `maze-layout` (porta em cima, saida logo acima).
+  houseInterior: [
+    { x: 8, y: 9 },
+    { x: 9, y: 9 },
+    { x: 10, y: 9 },
+  ],
+  houseDoor: { x: 9, y: 8 },
+  houseExit: { x: 9, y: 7 },
 };
 
 /**
@@ -147,6 +175,11 @@ export class GameState {
   won = false;
   frightenedRemainingMs = 0;
 
+  // Sequencia de morte/respawn (congela o jogo): 'dying' = jogador sumido;
+  // 'ready' = tudo reposicionado e visivel, aguardando. O render le isto.
+  private respawnPhase: 'none' | 'dying' | 'ready' = 'none';
+  private respawnTimerMs = 0;
+
   private readonly rng: Rng;
   private scheduleElapsedMs = 0;
   private extraLifeAwarded = false;
@@ -166,6 +199,14 @@ export class GameState {
 
   private playerAcc = 0;
   private ghostAccs: number[];
+
+  // Celula anterior de cada ator — o render interpola `prev -> position` para um
+  // movimento suave sem "estourar" a celula nas curvas (overshoot).
+  private playerPrev: Vec2;
+  private ghostPrev: Vec2[];
+  // Fantasma roteirizado saindo da casa (ignora a IA ate alcancar a saida).
+  private ghostExiting: boolean[];
+  private readonly houseCells: ReadonlySet<string>;
 
   private readonly playerInterval: number;
 
@@ -195,6 +236,17 @@ export class GameState {
       mode: g.mode,
     }));
     this.ghostAccs = this.ghosts.map(() => 0);
+
+    const cellKey = (v: Vec2): string => `${v.x},${v.y}`;
+    this.houseCells = new Set([...this.config.houseInterior, this.config.houseDoor].map(cellKey));
+    this.playerPrev = { ...this.player.position };
+    this.ghostPrev = this.ghosts.map((g) => ({ ...g.position }));
+    this.ghostExiting = this.ghosts.map((g) => this.houseCells.has(cellKey(g.position)));
+  }
+
+  /** A casa cobre as celulas internas e a porta (a saida ja e o labirinto livre). */
+  private inHouse(pos: Vec2): boolean {
+    return this.houseCells.has(`${pos.x},${pos.y}`);
   }
 
   get score(): number {
@@ -203,6 +255,16 @@ export class GameState {
 
   get isFrightened(): boolean {
     return this.frightenedRemainingMs > 0;
+  }
+
+  /** Jogador sumido durante a pausa de morte — o render nao o desenha. */
+  get isDying(): boolean {
+    return this.respawnPhase === 'dying';
+  }
+
+  /** Tudo reposicionado e congelado, aguardando o "pronto" (mostra aviso). */
+  get isReady(): boolean {
+    return this.respawnPhase === 'ready';
   }
 
   /** Total de dots (pellets + power) comidos na vida atual. */
@@ -238,6 +300,16 @@ export class GameState {
     return interval > 0 ? Math.min(1, (this.ghostAccs[index] ?? 0) / interval) : 0;
   }
 
+  /** Celula que o jogador deixou no ultimo passo — origem da interpolacao. */
+  get playerPrevCell(): Vec2 {
+    return this.playerPrev;
+  }
+
+  /** Idem para um fantasma (origem da interpolacao do render). */
+  ghostPrevCell(index: number): Vec2 {
+    return this.ghostPrev[index] ?? this.ghosts[index]!.position;
+  }
+
   // --- Transicoes de fase ------------------------------------------------
 
   /** Inicia uma partida nova: zera tudo e vai para `playing`. */
@@ -253,6 +325,8 @@ export class GameState {
     this.pendingPopups = [];
     this.frightenedRemainingMs = 0;
     this.scheduleElapsedMs = 0;
+    this.respawnPhase = 'none';
+    this.respawnTimerMs = 0;
     this.resetEntities();
   }
 
@@ -264,6 +338,13 @@ export class GameState {
 
   tick(dtMs: number): void {
     if (this.phase !== 'playing') return;
+
+    // Sequencia de morte/respawn: tudo CONGELADO enquanto dura.
+    if (this.respawnPhase !== 'none') {
+      this.advanceRespawn(dtMs);
+      return;
+    }
+
     this.resetPending = false;
 
     this.advanceFrightened(dtMs);
@@ -298,6 +379,8 @@ export class GameState {
       if (ready) {
         g.houseState = 'out';
         g.mode = this.currentBaseMode();
+        // Liberado de dentro: roteiriza a saida pela porta antes de a IA assumir.
+        this.ghostExiting[this.ghosts.indexOf(g)] = true;
         this.returned.delete(p);
         this.releaseTimerMs = 0;
       }
@@ -368,6 +451,7 @@ export class GameState {
     this.playerAcc += dtMs;
     while (this.playerAcc >= this.playerInterval) {
       this.playerAcc -= this.playerInterval;
+      this.playerPrev = { ...this.player.position };
       this.player.update(this.maze);
       this.eatAtPlayer();
       if (this.phase !== 'playing') return;
@@ -388,21 +472,35 @@ export class GameState {
       let acc = this.ghostAccs[i]! + dtMs;
       while (acc >= this.ghostInterval(g)) {
         acc -= this.ghostInterval(g);
-        const blinky = this.ghosts.find((other) => other.personality === 'blinky')?.position
-          ?? this.player.position;
-        g.update(
-          this.maze,
-          { pacman: this.player.position, pacmanDir: this.player.direction, blinky },
-          this.rng,
-        );
-        if (g.mode === 'eaten' && equalsVec(g.position, g.homeTarget)) {
-          // Voltou comido para a casa: vira a esperar e e re-liberado pelo mecanismo.
-          g.houseState = 'inside';
-          this.returned.add(g.personality);
-          g.mode = this.currentBaseMode();
-          this.ghostAccs[i] = 0;
-          break;
+        this.ghostPrev[i] = { ...g.position };
+
+        // Saida roteirizada da casa: olhos (eaten) descem normalmente para o
+        // homeTarget; os demais, enquanto dentro da caixa, sobem pela porta.
+        if (this.ghostExiting[i] && g.mode !== 'eaten' && this.inHouse(g.position)) {
+          this.stepGhostOut(i);
+        } else if (g.mode === 'eaten') {
+          // Olhos voltam para casa por CAMINHO REAL (BFS): a IA greedy mira o alvo
+          // por distancia em linha reta e prende os olhos num minimo local ao redor
+          // da caixa murada (porta so no topo). BFS atravessa a porta sempre.
+          this.stepEyesHome(i);
+          if (equalsVec(g.position, g.homeTarget)) {
+            g.houseState = 'inside';
+            this.returned.add(g.personality);
+            g.mode = this.currentBaseMode();
+            this.ghostAccs[i] = 0;
+            break;
+          }
+        } else {
+          this.ghostExiting[i] = false; // ja saiu (ou nem estava na casa)
+          const blinky = this.ghosts.find((other) => other.personality === 'blinky')?.position
+            ?? this.player.position;
+          g.update(
+            this.maze,
+            { pacman: this.player.position, pacmanDir: this.player.direction, blinky },
+            this.rng,
+          );
         }
+
         this.checkCollisions();
         if (this.phase !== 'playing' || this.resetPending) {
           this.ghostAccs[i] = acc;
@@ -411,6 +509,74 @@ export class GameState {
       }
       this.ghostAccs[i] = acc;
     }
+  }
+
+  /**
+   * Um passo dos olhos rumo a casa pelo caminho mais curto (BFS). Os olhos
+   * ATRAVESSAM a porta (`throughDoor`) — e o unico jeito de reentrar na casa
+   * agora selada; o BFS acha a rota pela porta ate o homeTarget.
+   */
+  private stepEyesHome(index: number): void {
+    const g = this.ghosts[index]!;
+    const dir = this.bfsFirstDir(g.position, g.homeTarget, true);
+    if (dir === Direction.None) return;
+    const next = this.maze.step(g.position, dir, { throughDoor: true });
+    if (next) {
+      g.position = next;
+      g.direction = dir;
+    }
+  }
+
+  /**
+   * Primeira direcao no caminho mais curto de `from` a `to` (BFS sobre celulas
+   * caminhaveis, respeitando paredes e tuneis). `None` se `to` for inalcancavel
+   * ou ja for `from`. `throughDoor` libera a porta da casa (rota dos olhos).
+   */
+  private bfsFirstDir(from: Vec2, to: Vec2, throughDoor = false): Direction {
+    if (equalsVec(from, to)) return Direction.None;
+    const opts = { throughDoor };
+    const k = (v: Vec2): string => `${v.x},${v.y}`;
+    const seen = new Set<string>([k(from)]);
+    const queue: Array<{ cell: Vec2; first: Direction }> = [];
+    for (const d of STEP_DIRS) {
+      const n = this.maze.step(from, d, opts);
+      if (n) {
+        if (equalsVec(n, to)) return d;
+        seen.add(k(n));
+        queue.push({ cell: n, first: d });
+      }
+    }
+    while (queue.length > 0) {
+      const { cell, first } = queue.shift()!;
+      for (const d of STEP_DIRS) {
+        const n = this.maze.step(cell, d, opts);
+        if (n && !seen.has(k(n))) {
+          if (equalsVec(n, to)) return first;
+          seen.add(k(n));
+          queue.push({ cell: n, first });
+        }
+      }
+    }
+    return Direction.None;
+  }
+
+  /**
+   * Um passo da saida roteirizada: alinha-se a coluna da porta e entao sobe ate a
+   * celula-saida (acima da porta), ATRAVESSANDO a porta (`throughDoor`). Garante a
+   * saida sem depender da regra greedy (que oscilaria na caixa) e sem que a IA
+   * normal — que trata a porta como parede — consiga sair sozinha.
+   */
+  private stepGhostOut(index: number): void {
+    const g = this.ghosts[index]!;
+    const door = this.config.houseDoor;
+    const dir =
+      g.position.x < door.x ? Direction.Right : g.position.x > door.x ? Direction.Left : Direction.Up;
+    const next = this.maze.step(g.position, dir, { throughDoor: true });
+    if (next) {
+      g.position = next;
+      g.direction = dir;
+    }
+    if (equalsVec(g.position, this.config.houseExit)) this.ghostExiting[index] = false;
   }
 
   // --- Comer e colidir ---------------------------------------------------
@@ -466,8 +632,30 @@ export class GameState {
       this.won = false;
       return;
     }
-    this.resetEntities();
-    this.resetPending = true;
+    // Entra na sequencia de morte: NAO reposiciona ainda — o jogador some por
+    // `deathHideMs`; o reset (e o "pronto") vem depois, em advanceRespawn.
+    this.respawnPhase = 'dying';
+    this.respawnTimerMs = this.config.deathHideMs;
+    this.resetPending = true; // interrompe o resto do tick atual
+  }
+
+  /**
+   * Faz o relogio da pausa de morte andar. 'dying' (jogador sumido) -> ao zerar,
+   * reposiciona tudo e entra em 'ready' (visivel, congelado) -> ao zerar, retoma.
+   * Se algum tempo for 0, pula direto a etapa correspondente.
+   */
+  private advanceRespawn(dtMs: number): void {
+    this.respawnTimerMs -= dtMs;
+    if (this.respawnTimerMs > 0) return;
+
+    if (this.respawnPhase === 'dying') {
+      this.resetEntities();
+      this.respawnPhase = 'ready';
+      this.respawnTimerMs = this.config.readyMs;
+      if (this.respawnTimerMs <= 0) this.respawnPhase = 'none';
+    } else {
+      this.respawnPhase = 'none';
+    }
   }
 
   private checkExtraLife(): void {
@@ -498,5 +686,9 @@ export class GameState {
     this.fruitActive = false;
     this.playerAcc = 0;
     this.ghostAccs = this.ghosts.map(() => 0);
+    // Interpolacao e saida da casa reiniciam junto com as posicoes.
+    this.playerPrev = { ...this.player.position };
+    this.ghostPrev = this.ghosts.map((g) => ({ ...g.position }));
+    this.ghostExiting = this.ghosts.map((g) => this.inHouse(g.position));
   }
 }

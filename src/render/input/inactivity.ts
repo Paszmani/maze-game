@@ -15,6 +15,10 @@ export class InactivityMonitor {
   private readonly onIdle: () => void;
   private lastActivity: number;
   private fired = false;
+  // O relogio da cena (`time.now`) pode estar defasado em `create()`. So confiamos
+  // nele a partir da primeira `update()`, quando ja avancou — senao um `lastActivity`
+  // defasado dispararia o idle IMEDIATAMENTE (fazia a LeadScene "piscar e sumir").
+  private primed = false;
 
   constructor(scene: Phaser.Scene, timeoutMs: number, onIdle: () => void) {
     this.scene = scene;
@@ -29,11 +33,19 @@ export class InactivityMonitor {
   reset(): void {
     this.lastActivity = this.scene.time.now;
     this.fired = false;
+    this.primed = true;
   }
 
   update(): void {
     if (this.fired) return;
-    if (this.scene.time.now - this.lastActivity >= this.timeoutMs) {
+    const now = this.scene.time.now;
+    // Primeira atualizacao real: fixa a base e nao dispara (evita o falso idle).
+    if (!this.primed) {
+      this.primed = true;
+      this.lastActivity = now;
+      return;
+    }
+    if (now - this.lastActivity >= this.timeoutMs) {
       this.fired = true;
       this.onIdle();
     }

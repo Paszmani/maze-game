@@ -1,27 +1,22 @@
 /**
- * Processo principal do Electron — a casca de producao do totem (modulo 9).
+ * Processo principal do Electron — a casca desktop do jogo.
  *
- * Faz o que o navegador puro nao faz bem: janela kiosk em tela cheia com lockdown
- * (visitante nao escapa pro Windows) e gravacao de lead em disco via `fs`
+ * Janela NORMAL (sem kiosk/lockdown) + gravacao de lead em disco via `fs`
  * (1 JSON por lead + CSV consolidado, regenerado a cada gravacao p/ unir colunas).
  *
  * Layout de pastas esperado (ao lado do .exe em producao):
- *   KioskMaze.exe
+ *   Maze Game.exe
  *   config.json        -> { "themeId": "...", "terminalId": "..." }
  *   themes/<id>/...     -> temas externos (opcional; fallback ao bundle)
- *   data/leads/         -> SAIDA: leads.csv + raw/<...>.json
- *
- * Saida de admin: Ctrl+Shift+Q.
+ *   data/leads/         -> SAIDA: leads.csv + raw/<...>.json  (o CSV dos leads)
  */
 
-const { app, BrowserWindow, ipcMain, Menu, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 
 const APP_ROOT = path.join(__dirname, '..');
 const DEV_URL = process.env.KIOSK_DEV_URL;
-
-let allowQuit = false;
 
 // --- Caminhos de disco -----------------------------------------------------
 
@@ -191,46 +186,21 @@ function registerIpc() {
   });
 }
 
-// --- Janela e lockdown -----------------------------------------------------
+// --- Janela -----------------------------------------------------------------
 
+// Janela NORMAL: sem kiosk/lockdown. Pode minimizar, fechar, usar atalhos e
+// alternar tela cheia (F11) livremente.
 function createWindow() {
-  Menu.setApplicationMenu(null);
-
   const win = new BrowserWindow({
-    fullscreen: true,
-    kiosk: true,
-    frame: false,
-    autoHideMenuBar: true,
-    backgroundColor: '#000010',
+    width: 900,
+    height: 1000,
+    backgroundColor: '#000000',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
     },
-  });
-
-  // Bloqueia atalhos de fuga; Ctrl+Shift+Q sai (admin).
-  win.webContents.on('before-input-event', (event, input) => {
-    const key = (input.key || '').toLowerCase();
-    const mod = input.control || input.meta;
-    if (mod && input.shift && key === 'q') {
-      allowQuit = true;
-      app.exit(0);
-      return;
-    }
-    const blockedCombo = mod && ['r', 'w', 'n', 't', 'p', '-', '=', '+', '0'].includes(key);
-    const blockedKey = ['F5', 'F11', 'F12'].includes(input.key);
-    const devtools = mod && input.shift && (key === 'i' || key === 'j' || key === 'c');
-    if (blockedCombo || blockedKey || devtools) event.preventDefault();
-  });
-
-  // Impede abrir novas janelas (links externos, window.open).
-  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-
-  // Impede fechar a janela, exceto na saida de admin.
-  win.on('close', (e) => {
-    if (!allowQuit) e.preventDefault();
   });
 
   if (DEV_URL) win.loadURL(DEV_URL);

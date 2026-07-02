@@ -1,9 +1,9 @@
 {
-  "name": "kiosk-maze",
+  "name": "maze-game",
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Jogo de labirinto para totem de evento — core agnostico de engine",
+  "description": "Maze Game — jogo de labirinto com captura de lead (core agnostico de engine)",
   "author": "GSB",
   "main": "shell/main.cjs",
   "scripts": {

@@ -141,19 +141,21 @@ describe('GameState — colisoes', () => {
     expect(gs.ghosts[0]!.mode).not.toBe('frightened');
   });
 
-  it('fantasma em chase tira uma vida e reposiciona', () => {
+  it('fantasma em chase tira uma vida e, apos a pausa de morte, reposiciona', () => {
     const gs = new GameState({
       maze: Maze.fromAscii(['#####', '#...#', '#####']),
       pellets: Pellets.fromAscii(['#####', '#...#', '#####']),
       player: new Player({ x: 1, y: 1 }, Direction.Right),
       ghosts: [blinky({ position: { x: 2, y: 1 }, mode: 'chase' })],
-      config: STEP,
+      config: { ...STEP, deathHideMs: 200, readyMs: 0 },
     });
     gs.start();
-    gs.tick(TICK); // colide com o fantasma em (2,1)
+    gs.tick(TICK); // colide em (2,1) -> perde vida e entra na pausa de morte
     expect(gs.lives).toBe(2);
     expect(gs.phase).toBe('playing');
-    expect(gs.player.position).toEqual({ x: 1, y: 1 }); // voltou ao spawn
+    expect(gs.isDying).toBe(true); // jogador sumido, tudo congelado
+    gs.tick(200); // passa a pausa -> reposiciona no spawn
+    expect(gs.player.position).toEqual({ x: 1, y: 1 });
   });
 
   it('perder a ultima vida e game over', () => {

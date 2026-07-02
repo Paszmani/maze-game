@@ -6,7 +6,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
  */
 const config: CapacitorConfig = {
   appId: 'com.gsb.kioskmaze',
-  appName: 'KioskMaze',
+  appName: 'Maze Game',
   webDir: 'dist',
   android: {
     // Sem barra de status/navegacao por cima do jogo.

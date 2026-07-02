@@ -14,6 +14,23 @@ import { getKiosk } from '../shell/bridge.js';
 /** Chave do localStorage onde o editor grava o tema em edicao para a previa. */
 export const PREVIEW_KEY = 'kioskMazeThemeDraft';
 
+/**
+ * Chave do localStorage onde o editor grava o tema APLICADO (web). "Aplicar e
+ * voltar ao jogo" persiste aqui; o jogo le isto na ausencia de `?theme=` e de
+ * totem nativo. E o que faz a customizacao sobreviver ao voltar/recarregar.
+ */
+export const APPLIED_KEY = 'kioskMazeActiveTheme';
+
+/** Tema aplicado pelo editor (web), ou `null` se nunca foi salvo. */
+export function loadAppliedTheme(): unknown | null {
+  try {
+    const raw = localStorage.getItem(APPLIED_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function activeThemeId(): string {
   const params = new URLSearchParams(window.location.search);
   return params.get('theme') ?? 'gsb-default';
@@ -66,8 +83,13 @@ export async function loadActiveTheme(): Promise<ActiveTheme> {
     }
   }
 
-  // Web: busca o arquivo servido.
+  // Web: tema aplicado pelo editor (localStorage) tem prioridade, a menos que
+  // `?theme=` selecione explicitamente uma marca servida (para demos/teste).
   const id = activeThemeId();
+  if (!params.has('theme')) {
+    const applied = loadAppliedTheme();
+    if (applied) return { theme: resolveTheme(applied), base: '' };
+  }
   return { theme: await loadTheme(themeUrl(id)), base: `themes/${id}/` };
 }
 

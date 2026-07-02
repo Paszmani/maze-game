@@ -1,11 +1,13 @@
 /**
- * Controles de toque para o totem (modulo 5): swipe como principal, d-pad
- * on-screen como reforco. Conforme a UX de kiosk — Pac-Man e direcional, deslizar
- * e natural; o d-pad cobre quem prefere tocar botao.
+ * Controles de toque (modulo 5): SWIPE em qualquer ponto da tela — deslizar o
+ * dedo em qualquer canto vira o player naquela direcao. Opcionalmente, um d-pad
+ * on-screen (setas) como reforco — ligado so no Android (`showDpad`).
  *
- * Desacoplado de proposito: nao conhece Player nem regra de jogo. Recebe um
- * callback `onDirection(dir)` e so traduz gesto -> direcao. Quem liga isso ao
- * core e a GameScene.
+ * O swipe dispara DURANTE o arraste (no `pointermove`), assim que cruza o limiar,
+ * e "re-arma" no ponto atual: um unico movimento continuo encadeia varias viradas.
+ *
+ * Desacoplado: nao conhece Player nem regra de jogo. Recebe `onDirection(dir)` e
+ * so traduz gesto -> direcao. A GameScene liga isso ao core.
  */
 
 import Phaser from 'phaser';
@@ -16,11 +18,8 @@ export type DirectionHandler = (dir: Direction) => void;
 export interface TouchControlsOptions {
   /** Deslocamento minimo (px) para um arrasto contar como swipe. */
   swipeThreshold?: number;
-  /** Centro do d-pad em coordenadas da cena. */
-  dpadCenter?: { x: number; y: number };
-  /** Lado de cada botao (px). UX de totem pede alvos grandes. */
-  dpadButtonSize?: number;
-  dpadAlpha?: number;
+  /** Mostra o d-pad on-screen (setas). Ligado so no Android. */
+  showDpad?: boolean;
 }
 
 const ARROW: Readonly<Record<Direction, string>> = {
@@ -46,10 +45,8 @@ export class TouchControls {
     this.swipeThreshold = options.swipeThreshold ?? 24;
 
     this.bindSwipe();
-    this.buildDpad(options);
+    if (options.showDpad) this.buildDpad();
   }
-
-  // --- Swipe (gesto em qualquer ponto da tela) ---------------------------
 
   private bindSwipe(): void {
     this.scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
@@ -58,6 +55,18 @@ export class TouchControls {
       this.tracking = true;
     });
 
+    // Durante o arraste: ao cruzar o limiar, dispara e re-arma no ponto atual.
+    this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (!this.tracking || !pointer.isDown) return;
+      const dir = this.resolveSwipe(pointer.x - this.startX, pointer.y - this.startY);
+      if (dir !== Direction.None) {
+        this.onDirection(dir);
+        this.startX = pointer.x;
+        this.startY = pointer.y;
+      }
+    });
+
+    // Ao soltar: resolve um flick curto que nao chegou a disparar no move.
     this.scene.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (!this.tracking) return;
       this.tracking = false;
@@ -73,31 +82,27 @@ export class TouchControls {
     return dy > 0 ? Direction.Down : Direction.Up;
   }
 
-  // --- D-pad on-screen ---------------------------------------------------
+  // --- D-pad on-screen (Android) -----------------------------------------
 
-  private buildDpad(options: TouchControlsOptions): void {
-    const size = options.dpadButtonSize ?? 56;
-    const alpha = options.dpadAlpha ?? 0.3;
-    const center = options.dpadCenter ?? {
-      x: this.scene.scale.width - size * 1.9,
-      y: this.scene.scale.height - size * 1.9,
-    };
+  private buildDpad(): void {
+    const size = 58;
+    const alpha = 0.28;
+    const cx = this.scene.scale.width - size * 1.9;
+    const cy = this.scene.scale.height - size * 1.9;
     const gap = size * 1.05;
-
-    this.makeButton(center.x, center.y - gap, Direction.Up, size, alpha);
-    this.makeButton(center.x, center.y + gap, Direction.Down, size, alpha);
-    this.makeButton(center.x - gap, center.y, Direction.Left, size, alpha);
-    this.makeButton(center.x + gap, center.y, Direction.Right, size, alpha);
+    this.makeButton(cx, cy - gap, Direction.Up, size, alpha);
+    this.makeButton(cx, cy + gap, Direction.Down, size, alpha);
+    this.makeButton(cx - gap, cy, Direction.Left, size, alpha);
+    this.makeButton(cx + gap, cy, Direction.Right, size, alpha);
   }
 
   private makeButton(x: number, y: number, dir: Direction, size: number, alpha: number): void {
-    const button = this.scene.add
+    this.scene.add
       .rectangle(x, y, size, size, 0xffffff, alpha)
       .setScrollFactor(0)
       .setDepth(1000)
-      .setInteractive({ useHandCursor: true });
-
-    button.on('pointerdown', () => this.onDirection(dir));
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.onDirection(dir));
 
     this.scene.add
       .text(x, y, ARROW[dir], { fontFamily: 'monospace', fontSize: `${Math.round(size * 0.55)}px`, color: '#000000' })

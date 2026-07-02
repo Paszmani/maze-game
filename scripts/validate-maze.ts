@@ -5,7 +5,14 @@
 
 import { Maze } from '../src/core/maze.js';
 import { Pellets } from '../src/core/pellets.js';
-import { MAZE_LAYOUT, PLAYER_SPAWN, GHOST_SPAWNS } from '../src/render/maze-layout.js';
+import {
+  MAZE_LAYOUT,
+  PLAYER_SPAWN,
+  GHOST_SPAWNS,
+  HOUSE_INTERIOR,
+  HOUSE_DOOR,
+  HOUSE_EXIT,
+} from '../src/render/maze-layout.js';
 import { Direction } from '../src/core/direction.js';
 
 const rows = [...MAZE_LAYOUT];
@@ -46,13 +53,26 @@ console.log(`Labirinto ${maze.width}x${maze.height}`);
 console.log(`Celulas caminhaveis alcancadas: ${seen.size}`);
 console.log(`Pellets: ${total}  |  inalcancaveis: ${unreachable}`);
 
+// Spawns internos da casa ficam SELADOS (so alcancaveis pela porta de fantasma);
+// nao precisam ser alcancaveis pelo flood-fill do jogador.
+const interior = new Set(HOUSE_INTERIOR.map((c) => key(c.x, c.y)));
 for (const g of GHOST_SPAWNS) {
-  const ok = maze.isWalkable(g.position.x, g.position.y) && seen.has(key(g.position.x, g.position.y));
-  console.log(`  ${g.personality} spawn (${g.position.x},${g.position.y}): ${ok ? 'OK' : 'INVALIDO'}`);
+  const k = key(g.position.x, g.position.y);
+  const inHouse = interior.has(k);
+  const ok = maze.isWalkable(g.position.x, g.position.y) && (seen.has(k) || inHouse);
+  console.log(`  ${g.personality} spawn (${g.position.x},${g.position.y}): ${ok ? 'OK' : 'INVALIDO'}${inHouse ? ' (na casa)' : ''}`);
 }
 
-if (unreachable > 0) {
-  console.error('FALHA: ha pellets inalcancaveis.');
+// A porta precisa ser tile 'door' e a celula-saida precisa ser alcancavel pelo
+// labirinto (para os olhos comidos conseguirem chegar ate ela e reentrar).
+const doorOk = maze.isDoor(HOUSE_DOOR.x, HOUSE_DOOR.y);
+const exitReachable = seen.has(key(HOUSE_EXIT.x, HOUSE_EXIT.y));
+console.log(`  porta (${HOUSE_DOOR.x},${HOUSE_DOOR.y}) e 'door': ${doorOk ? 'OK' : 'INVALIDO'}`);
+console.log(`  saida (${HOUSE_EXIT.x},${HOUSE_EXIT.y}) alcancavel: ${exitReachable ? 'OK' : 'INVALIDO'}`);
+console.log(`  interior selado (jogador nao entra): ${HOUSE_INTERIOR.every((c) => !seen.has(key(c.x, c.y))) ? 'OK' : 'FALHA (jogador alcanca a casa)'}`);
+
+if (unreachable > 0 || !doorOk || !exitReachable) {
+  console.error('FALHA na validacao do labirinto.');
   process.exit(1);
 }
-console.log('OK: labirinto conectado, todos os pellets alcancaveis.');
+console.log('OK: labirinto conectado, pellets alcancaveis, casa selada com porta de fantasma.');

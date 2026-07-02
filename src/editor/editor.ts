@@ -9,8 +9,17 @@
  * NAO faz parte do fluxo do totem: e ferramenta do operador para gerar temas.
  */
 
-import { PREVIEW_KEY } from '../render/theme-loader.js';
+import { PREVIEW_KEY, APPLIED_KEY, loadAppliedTheme } from '../render/theme-loader.js';
 import { getKiosk } from '../shell/bridge.js';
+import { isCapacitorNative, makeCapacitorBridge } from '../platform/capacitor-kiosk.js';
+
+// O editor.html NAO roda o main.ts, entao precisa instalar a ponte nativa aqui —
+// senao no Android `getKiosk()` seria undefined e "Aplicar e voltar" nunca
+// gravaria o tema no disco (o jogo carrega do disco no totem) => customizacao
+// "nao aplicava" no Android.
+if (!window.kiosk && isCapacitorNative()) {
+  window.kiosk = makeCapacitorBridge();
+}
 
 const GHOST_LABELS = ['Blinky', 'Pinky', 'Inky', 'Clyde'] as const;
 const LEAD_TYPES = ['text', 'email', 'tel', 'select', 'checkbox'] as const;
@@ -58,8 +67,8 @@ function makeDraft(): Draft {
     id: 'meu-tema',
     name: 'Meu Tema',
     colors: {
-      maze: '#1b3a8f', background: '#000010', pellet: '#ffffff', power: '#ffcc00', player: '#ffcc00',
-      frightened: '#2233ff', eaten: '#556699', uiAccent: '#e30613', text: '#ffffff',
+      maze: '#2b2b2b', background: '#000000', pellet: '#ffffff', power: '#ffcc00', player: '#ffcc00',
+      frightened: '#3355ff', eaten: '#555555', uiAccent: '#bbbbbb', text: '#ffffff',
       ghosts: ['#ff0000', '#ff66cc', '#00ffff', '#ff9900'],
     },
     branding: { attractHeadline: 'DESVIE. COLETE. VENÇA.', ctaButton: 'TOCAR PARA JOGAR', leadHeadline: 'Cadastre-se e concorra a um brinde!', logo: '' },
@@ -67,9 +76,9 @@ function makeDraft(): Draft {
     sprites: { player: '', pellet: '', powerPellet: '', frightened: '', fruit: '', ghosts: ['', '', '', ''], mazeBackground: '', attractBackground: '' },
     attract: {
       showPlayer: true,
-      title: { visible: true, color: '#e30613', size: 24, y: 0.2 },
-      headline: { visible: true, color: '#ffffff', size: 30, y: 0.4 },
-      cta: { visible: true, color: '#000010', background: '#ffcc00', size: 26, y: 0.66 },
+      title: { visible: true, color: '#ffffff', size: 24, y: 0.2 },
+      headline: { visible: true, color: '#bbbbbb', size: 30, y: 0.4 },
+      cta: { visible: true, color: '#000000', background: '#ffcc00', size: 26, y: 0.66 },
       logo: { visible: true, scale: 1, y: 0.5 },
     },
     leadForm: {
@@ -137,7 +146,7 @@ function selectInput(opts: readonly string[], get: () => string, set: (v: string
   return s;
 }
 
-function readDataUrl(file: File): Promise<string> {
+function readRawDataUrl(file: File): Promise<string> {
   return new Promise((res, rej) => {
     const r = new FileReader();
     r.onload = () => res(String(r.result));
@@ -146,7 +155,39 @@ function readDataUrl(file: File): Promise<string> {
   });
 }
 
-function fileRow(label: string, get: () => string, set: (v: string) => void): HTMLElement {
+/**
+ * Le a imagem e REDIMENSIONA para no maximo `maxPx` no maior lado, re-exportando
+ * como PNG (preserva transparencia dos sprites). Sprites/fundos de jogo sao
+ * pequenos na tela; guardar a foto original (varios MB) estourava a cota do
+ * localStorage (web) e o Filesystem do totem (Android) — e ai as imagens custom
+ * "sumiam". Agora o data-URI fica em poucos KB.
+ */
+async function readDataUrl(file: File, maxPx: number): Promise<string> {
+  const raw = await readRawDataUrl(file);
+  return await new Promise<string>((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const hh = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = hh;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return resolve(raw);
+      ctx.drawImage(img, 0, 0, w, hh);
+      try {
+        resolve(canvas.toDataURL('image/png'));
+      } catch {
+        resolve(raw);
+      }
+    };
+    img.onerror = () => resolve(raw); // formato exotico: mantem o original
+    img.src = raw;
+  });
+}
+
+function fileRow(label: string, get: () => string, set: (v: string) => void, maxPx = 128): HTMLElement {
   const img = h('img');
   const refresh = (): void => { const v = get(); img.src = v; img.style.visibility = v ? 'visible' : 'hidden'; };
   const file = h('input');
@@ -155,7 +196,7 @@ function fileRow(label: string, get: () => string, set: (v: string) => void): HT
   file.addEventListener('change', async () => {
     const f = file.files?.[0];
     if (!f) return;
-    set(await readDataUrl(f));
+    set(await readDataUrl(f, maxPx));
     refresh();
     schedule();
   });
@@ -239,9 +280,11 @@ function buildAll(): void {
     ...GHOST_LABELS.map((label, i) => row(`Fantasma ${label}`, colorInput(() => draft.colors.ghosts[i]!, (v) => (draft.colors.ghosts[i] = v)))),
   ));
 
+  const bgKeys = new Set(['mazeBackground', 'attractBackground']);
   sections.append(section('Sprites (imagens)', false,
-    ...SPRITE_FIELDS.map((f) => fileRow(f.label, () => draft.sprites[f.key], (v) => (draft.sprites[f.key] = v))),
-    fileRow('Logo', () => draft.branding.logo, (v) => (draft.branding.logo = v)),
+    ...SPRITE_FIELDS.map((f) =>
+      fileRow(f.label, () => draft.sprites[f.key], (v) => (draft.sprites[f.key] = v), bgKeys.has(f.key) ? 640 : 128),
+    ),
     ...GHOST_LABELS.map((label, i) => fileRow(`Fantasma ${label}`, () => draft.sprites.ghosts[i]!, (v) => (draft.sprites.ghosts[i] = v))),
   ));
 
@@ -254,12 +297,14 @@ function buildAll(): void {
   sections.append(section('Tela Attract', false,
     row('Mostrar player animado', checkInput(() => draft.attract.showPlayer, (v) => (draft.attract.showPlayer = v))),
     ...attractTextRows('Título', draft.attract.title),
-    ...attractTextRows('Headline', draft.attract.headline),
-    ...attractTextRows('CTA', draft.attract.cta),
-    row('CTA — cor de fundo', colorInput(() => draft.attract.cta.background, (v) => (draft.attract.cta.background = v))),
+    // Logo — selecao e controles ficam ENTRE o titulo e a headline.
+    fileRow('Logo (imagem)', () => draft.branding.logo, (v) => (draft.branding.logo = v), 512),
     row('Logo — visível', checkInput(() => draft.attract.logo.visible, (v) => (draft.attract.logo.visible = v))),
     row('Logo — escala', numberInput(() => draft.attract.logo.scale, (v) => (draft.attract.logo.scale = v), 0.1)),
     row('Logo — posição Y (0–1)', numberInput(() => draft.attract.logo.y, (v) => (draft.attract.logo.y = v), 0.02)),
+    ...attractTextRows('Headline', draft.attract.headline),
+    ...attractTextRows('CTA', draft.attract.cta),
+    row('CTA — cor de fundo', colorInput(() => draft.attract.cta.background, (v) => (draft.attract.cta.background = v))),
   ));
 
   sections.append(section('Gameplay', false,
@@ -401,26 +446,58 @@ function importDraft(o: any): void {
 
 // --- Wire up ---------------------------------------------------------------
 
-(document.getElementById('refresh') as HTMLButtonElement).addEventListener('click', updatePreview);
-(document.getElementById('back') as HTMLButtonElement).addEventListener('click', () => {
+const kiosk = getKiosk();
+
+/**
+ * "Aplicar e voltar ao jogo": PERSISTE o tema (o que faltava — antes o jogo
+ * recarregava o theme.json do disco e perdia as edicoes). No web grava em
+ * localStorage (APPLIED_KEY, que o loader le); no totem grava no disco via ponte.
+ */
+async function applyAndReturn(btn: HTMLButtonElement): Promise<void> {
+  const theme = buildExport();
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Aplicando…';
+  try {
+    localStorage.setItem(APPLIED_KEY, JSON.stringify(theme));
+  } catch {
+    /* cota cheia: segue mesmo assim (o totem usa o disco) */
+  }
+  if (kiosk) {
+    try {
+      await kiosk.saveTheme(theme);
+    } catch {
+      btn.disabled = false;
+      btn.textContent = label;
+      alert('Falha ao salvar o tema no totem.');
+      return;
+    }
+  }
   window.location.href = 'index.html';
-});
+}
+
+for (const id of ['apply', 'apply-mobile']) {
+  const b = document.getElementById(id) as HTMLButtonElement | null;
+  b?.addEventListener('click', () => void applyAndReturn(b));
+}
+
+(document.getElementById('refresh') as HTMLButtonElement).addEventListener('click', updatePreview);
 (document.getElementById('download') as HTMLButtonElement).addEventListener('click', download);
 
-// No totem (Electron), salva o tema direto no disco e aponta o config para ele.
-const kiosk = getKiosk();
+// No totem (Electron/Android), botao extra: salva no disco SEM sair do editor.
 const saveBtn = document.getElementById('save-disk') as HTMLButtonElement;
 if (kiosk) {
   saveBtn.style.display = '';
   saveBtn.addEventListener('click', async () => {
     try {
       await kiosk.saveTheme(buildExport());
-      alert('Tema salvo no totem. Use "Voltar ao jogo" para aplicar.');
+      alert('Tema salvo no totem.');
     } catch {
       alert('Falha ao salvar o tema.');
     }
   });
 }
+
 (document.getElementById('import') as HTMLInputElement).addEventListener('change', async (e) => {
   const file = (e.target as HTMLInputElement).files?.[0];
   if (!file) return;
@@ -433,5 +510,27 @@ if (kiosk) {
   }
 });
 
-buildAll();
-updatePreview();
+// Abas Editar/Prévia (so aparecem no mobile; no desktop os dois painéis convivem).
+function setTab(tab: 'edit' | 'preview'): void {
+  document.body.dataset.tab = tab;
+  document.getElementById('tab-edit')?.classList.toggle('active', tab === 'edit');
+  document.getElementById('tab-preview')?.classList.toggle('active', tab === 'preview');
+  if (tab === 'preview') updatePreview(); // garante a prévia fresca ao abrir a aba
+}
+document.getElementById('tab-edit')?.addEventListener('click', () => setTab('edit'));
+document.getElementById('tab-preview')?.addEventListener('click', () => setTab('preview'));
+
+// Pre-carrega o tema atualmente APLICADO para editar sobre ele (e nao recomecar
+// do zero a cada visita). Totem le do disco; web, do localStorage.
+async function init(): Promise<void> {
+  try {
+    const existing = kiosk ? await kiosk.loadTheme() : loadAppliedTheme();
+    if (existing) importDraft(existing);
+  } catch {
+    /* sem tema salvo ainda: usa o rascunho default */
+  }
+  buildAll();
+  updatePreview();
+}
+
+void init();

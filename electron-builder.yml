@@ -1,5 +1,5 @@
 appId: com.gsb.kioskmaze
-productName: KioskMaze
+productName: Maze Game
 directories:
   output: release
 # A casca + o bundle web. Os temas vao no bundle (dist/themes); para trocar sem

@@ -15,8 +15,8 @@ import type { LeadField } from '../../theme/theme-schema.js';
 import { DEFAULT_THEME } from '../../theme/default-theme.js';
 import { numberToCss } from '../theme-loader.js';
 import { InactivityMonitor, inactivityMs } from '../input/inactivity.js';
-import { INACTIVITY_MS } from '../constants.js';
 import { createLeadStore, terminalId, type Lead } from '../../data/lead-store.js';
+import { createLeaderboard } from '../../data/leaderboard.js';
 
 interface Control {
   field: LeadField;
@@ -26,12 +26,24 @@ interface Control {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * A captura de lead so sai ao ENVIAR. Mantemos uma rede de seguranca de
+ * inatividade mais longa (totem nao pode ficar preso se a pessoa abandonar),
+ * mas QUALQUER interacao com o formulario zera o cronometro — quem esta
+ * preenchendo nunca e expulso. Tunavel por `?idle=<ms>`.
+ */
+const LEAD_IDLE_MS = 60_000;
+
 export class LeadScene extends Phaser.Scene {
   private theme: Theme = DEFAULT_THEME;
   private score = 0;
   private controls: Control[] = [];
   private error!: Phaser.GameObjects.Text;
   private inactivity!: InactivityMonitor;
+  // Referencia ao form (DOM): elementos DOM do Phaser vivem num container
+  // COMPARTILHADO entre cenas, entao precisam ser destruidos explicitamente —
+  // senao o <form> "vaza" e fica sobreposto ao jogo na partida seguinte.
+  private formDom?: Phaser.GameObjects.DOMElement;
 
   constructor() {
     super('lead');
@@ -48,8 +60,12 @@ export class LeadScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const { colors, branding } = this.theme;
 
+    // Fundo solido cobrindo a tela: a captura de lead e uma tela fixa propria,
+    // nao um overlay sobre o jogo.
+    this.add.rectangle(0, 0, width, height, colors.background, 1).setOrigin(0, 0).setDepth(-1);
+
     this.add
-      .text(width / 2, height * 0.1, `PONTOS: ${this.score}`, {
+      .text(width / 2, height * 0.08, this.score > 0 ? `PONTOS: ${this.score}` : 'FIM DE JOGO', {
         fontFamily: 'monospace',
         fontSize: '30px',
         color: numberToCss(colors.power),
@@ -57,7 +73,7 @@ export class LeadScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(width / 2, height * 0.2, branding.leadHeadline, {
+      .text(width / 2, height * 0.17, branding.leadHeadline, {
         fontFamily: 'monospace',
         fontSize: '20px',
         color: colors.text,
@@ -67,10 +83,15 @@ export class LeadScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     const form = this.buildForm();
-    this.add.dom(width / 2, height * 0.56, form);
+    this.formDom = this.add.dom(width / 2, height * 0.55, form);
+
+    // Garante a remocao do <form> ao sair da cena por QUALQUER caminho
+    // (envio, inatividade, recriacao) — evita o overlay fantasma sobre o jogo.
+    this.events.once('shutdown', this.destroyForm, this);
+    this.events.once('destroy', this.destroyForm, this);
 
     this.error = this.add
-      .text(width / 2, height * 0.9, '', {
+      .text(width / 2, height * 0.92, '', {
         fontFamily: 'monospace',
         fontSize: '16px',
         color: numberToCss(colors.uiAccent),
@@ -79,7 +100,12 @@ export class LeadScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.inactivity = new InactivityMonitor(this, inactivityMs(INACTIVITY_MS), () => this.scene.start('attract'));
+    // Rede de seguranca contra abandono — zerada a cada interacao com o form,
+    // de modo que so dispara se a pessoa realmente largar o totem.
+    this.inactivity = new InactivityMonitor(this, inactivityMs(LEAD_IDLE_MS), () => this.scene.start('attract'));
+    for (const ev of ['input', 'change', 'pointerdown', 'keydown']) {
+      form.addEventListener(ev, () => this.inactivity.reset());
+    }
   }
 
   override update(): void {
@@ -108,6 +134,18 @@ export class LeadScene extends Phaser.Scene {
     for (const field of this.theme.leadForm.fields) {
       form.append(this.buildControl(field));
     }
+
+    const note = document.createElement('p');
+    note.textContent = 'Preencha os dados para concluir e concorrer.';
+    Object.assign(note.style, {
+      margin: '2px 0 0',
+      fontSize: '13px',
+      lineHeight: '1.4',
+      color: this.theme.colors.text,
+      opacity: '0.7',
+      textAlign: 'center',
+    } satisfies Partial<CSSStyleDeclaration>);
+    form.append(note);
 
     const submit = document.createElement('button');
     submit.type = 'submit';
@@ -216,20 +254,32 @@ export class LeadScene extends Phaser.Scene {
     const fields: Record<string, string> = {};
     for (const c of this.controls) fields[c.field.id] = c.get();
 
+    const timestamp = new Date().toISOString();
     const lead: Lead = {
       fields,
       score: this.score,
       terminalId: (this.registry.get('terminalId') as string | undefined) ?? terminalId(),
       themeId: this.theme.id,
-      timestamp: new Date().toISOString(),
+      timestamp,
     };
     createLeadStore().save(lead);
+
+    // Placar local: usa o campo de nome (id 'name'); cai no primeiro preenchido.
+    const name = fields['name'] ?? Object.values(fields).find((v) => v.trim().length > 0) ?? '';
+    createLeaderboard().add(name, this.score, timestamp);
 
     this.confirmAndExit();
   }
 
+  /** Remove o <form> do DOM. Idempotente — seguro chamar mais de uma vez. */
+  private destroyForm(): void {
+    this.formDom?.destroy();
+    this.formDom = undefined;
+  }
+
   private confirmAndExit(): void {
-    this.children.removeAll();
+    this.destroyForm(); // tira o formulario da tela antes do agradecimento
+    this.children.removeAll(true); // `true` DESTROI os objetos (nao so remove da lista)
     const { width, height } = this.scale;
     this.add
       .text(width / 2, height / 2, 'OBRIGADO!', {

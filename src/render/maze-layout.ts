@@ -23,25 +23,52 @@ const POWER: ReadonlyArray<Vec2> = [
   { x: WIDTH - 2, y: HEIGHT - 2 },
 ];
 
+/**
+ * Casa dos fantasmas (caixa fisica), estampada sobre a treliça. Caixa de 3x1
+ * celulas internas com uma porta 'D' no topo (so rota de fantasma). ' ' =
+ * caminhavel sem pellet.
+ */
+export const HOUSE_INTERIOR: ReadonlyArray<Vec2> = [
+  { x: 8, y: 9 },
+  { x: 9, y: 9 },
+  { x: 10, y: 9 },
+];
+export const HOUSE_DOOR: Vec2 = { x: 9, y: 8 };
+export const HOUSE_EXIT: Vec2 = { x: 9, y: 7 };
+/** Paredes extras que fecham a caixa (alem dos pilares ja existentes da treliça). */
+const HOUSE_WALLS: ReadonlyArray<Vec2> = [
+  { x: 7, y: 9 },
+  { x: 11, y: 9 },
+  { x: 9, y: 10 },
+];
+
 function build(): string[] {
-  const rows: string[] = [];
+  const grid: string[][] = [];
   for (let y = 0; y < HEIGHT; y++) {
-    let row = '';
+    const row: string[] = [];
     for (let x = 0; x < WIDTH; x++) {
       const border = x === 0 || x === WIDTH - 1 || y === 0 || y === HEIGHT - 1;
       if (border) {
-        row += y === TUNNEL_ROW && (x === 0 || x === WIDTH - 1) ? 'T' : '#';
+        row.push(y === TUNNEL_ROW && (x === 0 || x === WIDTH - 1) ? 'T' : '#');
       } else if (x % 2 === 0 && y % 2 === 0) {
-        row += '#'; // pilar
+        row.push('#'); // pilar
       } else if (POWER.some((p) => p.x === x && p.y === y)) {
-        row += 'o';
+        row.push('o');
       } else {
-        row += '.';
+        row.push('.');
       }
     }
-    rows.push(row);
+    grid.push(row);
   }
-  return rows;
+
+  // Estampa a casa: paredes fecham a caixa; interior fica livre e sem pellet
+  // (' '); a porta e um tile 'D' — bloqueada para todos, exceto as rotas de
+  // fantasma (saida quando liberado, retorno dos olhos).
+  for (const w of HOUSE_WALLS) grid[w.y]![w.x] = '#';
+  for (const c of HOUSE_INTERIOR) grid[c.y]![c.x] = ' ';
+  grid[HOUSE_DOOR.y]![HOUSE_DOOR.x] = 'D';
+
+  return grid.map((row) => row.join(''));
 }
 
 export const MAZE_LAYOUT: ReadonlyArray<string> = build();
@@ -61,9 +88,11 @@ export interface GhostSpawn {
 
 const CENTER: Vec2 = { x: 9, y: 9 };
 
+// Blinky nasce ja na saida (acima da porta); os demais dentro da caixa e sobem
+// pela porta quando liberados. homeTarget = centro da casa (destino dos olhos).
 export const GHOST_SPAWNS: ReadonlyArray<GhostSpawn> = [
-  { personality: 'blinky', position: { x: 9, y: 9 }, scatterCorner: { x: WIDTH - 2, y: 1 }, homeTarget: CENTER, direction: Direction.Left },
-  { personality: 'pinky', position: { x: 8, y: 9 }, scatterCorner: { x: 1, y: 1 }, homeTarget: CENTER, direction: Direction.Up },
-  { personality: 'inky', position: { x: 10, y: 9 }, scatterCorner: { x: WIDTH - 2, y: HEIGHT - 2 }, homeTarget: CENTER, direction: Direction.Down },
-  { personality: 'clyde', position: { x: 9, y: 10 }, scatterCorner: { x: 1, y: HEIGHT - 2 }, homeTarget: CENTER, direction: Direction.Up },
+  { personality: 'blinky', position: { ...HOUSE_EXIT }, scatterCorner: { x: WIDTH - 2, y: 1 }, homeTarget: CENTER, direction: Direction.Left },
+  { personality: 'pinky', position: { x: 9, y: 9 }, scatterCorner: { x: 1, y: 1 }, homeTarget: CENTER, direction: Direction.Up },
+  { personality: 'inky', position: { x: 8, y: 9 }, scatterCorner: { x: WIDTH - 2, y: HEIGHT - 2 }, homeTarget: CENTER, direction: Direction.Up },
+  { personality: 'clyde', position: { x: 10, y: 9 }, scatterCorner: { x: 1, y: HEIGHT - 2 }, homeTarget: CENTER, direction: Direction.Up },
 ];

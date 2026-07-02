@@ -2,140 +2,288 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Kiosk Maze — Editor de Tema</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Maze Game — Editor de Tema</title>
     <style>
       :root {
-        --bg: #0c1024;
-        --panel: #151a35;
-        --line: #2a3160;
+        --bg: #0a0a0a;
+        --bg-2: #050505;
+        --panel: #151515;
+        --panel-2: #1d1d1d;
+        --line: #333333;
         --accent: #ffcc00;
-        --text: #e8ebff;
-        --muted: #9aa3d0;
+        --accent-ink: #1a1300;
+        --brand: #9a9a9a;
+        --text: #f0f0f0;
+        --muted: #9a9a9a;
+        --focus: #bcbcbc;
+        --ok: #36d27a;
+        --tap: 46px;
+        --header-h: 64px;
+        --radius: 12px;
       }
       * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; }
       body {
         margin: 0;
-        font-family: system-ui, sans-serif;
-        background: var(--bg);
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(1100px 560px at 100% -10%, rgba(255, 255, 255, 0.05), transparent 60%),
+          var(--bg);
         color: var(--text);
-        display: grid;
-        grid-template-columns: 1fr 460px;
-        height: 100vh;
-        overflow: hidden;
+        min-height: 100vh;
+        min-height: 100dvh;
+        touch-action: manipulation;
       }
-      #form {
-        overflow-y: auto;
-        padding: 20px 24px 80px;
-      }
-      #side {
-        background: var(--panel);
-        border-left: 1px solid var(--line);
+
+      /* ---- Top bar -------------------------------------------------------- */
+      header.topbar {
+        position: sticky;
+        top: 0;
+        z-index: 30;
         display: flex;
-        flex-direction: column;
-        padding: 16px;
-        gap: 12px;
+        align-items: center;
+        gap: 16px;
+        padding: 12px clamp(14px, 3vw, 28px);
+        min-height: var(--header-h);
+        background: rgb(28, 28, 30);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid var(--line);
       }
-      h1 { font-size: 20px; margin: 0 0 4px; }
-      .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
-      details {
+      .brand h1 {
+        font-size: clamp(16px, 2.2vw, 20px);
+        margin: 0;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        font-weight: 700;
+        /* Cinza do padrao preto/cinza (mesmo tom da headline do jogo), nao branco. */
+        color: #bbbbbb;
+      }
+      .brand .sub { color: var(--muted); font-size: 12px; margin: 2px 0 0; }
+      .top-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+      /* ---- Buttons -------------------------------------------------------- */
+      button, .filebtn {
+        font: inherit;
+        border-radius: 10px;
+        padding: 11px 15px;
+        font-weight: 700;
+        font-size: 14px;
+        cursor: pointer;
+        min-height: var(--tap);
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+      .primary:hover { filter: brightness(1.06); }
+      .ghost { background: rgba(255, 255, 255, 0.03); color: var(--text); border-color: var(--line); font-weight: 600; }
+      .ghost:hover { background: rgba(255, 255, 255, 0.07); }
+      .filebtn { position: relative; overflow: hidden; }
+      .filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+      button.small { padding: 7px 11px; font-size: 12px; min-height: 0; border-radius: 8px; }
+
+      /* ---- Tabs (mobile only) -------------------------------------------- */
+      .tabs {
+        display: none;
+        position: sticky;
+        top: var(--header-h);
+        z-index: 25;
+        gap: 6px;
+        padding: 8px clamp(14px, 3vw, 28px);
+        background: rgba(28, 28, 30, 0.94);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid var(--line);
+      }
+      .tab {
+        flex: 1;
+        justify-content: center;
         background: var(--panel);
         border: 1px solid var(--line);
-        border-radius: 8px;
-        margin-bottom: 12px;
-        padding: 4px 14px;
+        color: var(--muted);
+        font-weight: 700;
       }
-      summary { cursor: pointer; font-weight: 600; padding: 10px 0; user-select: none; }
-      .row {
+      .tab.active { color: var(--text); border-color: var(--brand); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--brand); }
+
+      /* ---- Layout --------------------------------------------------------- */
+      .layout {
         display: grid;
-        grid-template-columns: 160px 1fr;
+        grid-template-columns: minmax(0, 1fr) clamp(340px, 36vw, 460px);
+        gap: clamp(14px, 2.4vw, 26px);
+        align-items: start;
+        padding: clamp(14px, 2.4vw, 26px);
+      }
+      #form { min-width: 0; }
+      .lead-note, .sub-lead { color: var(--muted); font-size: 13px; line-height: 1.5; }
+
+      /* ---- Preview side --------------------------------------------------- */
+      #side { position: sticky; top: calc(var(--header-h) + 16px); }
+      .preview-card {
+        background: linear-gradient(180deg, var(--panel-2), var(--panel));
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .preview-head { display: flex; align-items: center; justify-content: space-between; }
+      .preview-head strong { font-size: 13px; letter-spacing: 0.3px; }
+      .preview-head .dot { color: var(--ok); font-size: 11px; display: inline-flex; align-items: center; gap: 5px; }
+      .preview-head .dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+      .device {
+        border-radius: 14px;
+        background: #000;
+        border: 1px solid var(--line);
+        box-shadow: inset 0 0 0 6px rgba(0, 0, 0, 0.6), 0 10px 30px rgba(0, 0, 0, 0.5);
+        overflow: hidden;
+        aspect-ratio: 19 / 21; /* casa com o canvas do jogo (19x19 + HUD) */
+      }
+      iframe { width: 100%; height: 100%; border: 0; display: block; background: #000; }
+      .hint { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0; }
+
+      /* ---- Sections (accordion cards) ------------------------------------ */
+      details {
+        background: linear-gradient(180deg, var(--panel-2), var(--panel));
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        margin-bottom: 12px;
+        padding: 2px 16px;
+      }
+      details[open] { padding-bottom: 12px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); }
+      summary {
+        cursor: pointer;
+        font-weight: 700;
+        padding: 15px 0;
+        user-select: none;
+        font-size: 15px;
+        min-height: var(--tap);
+        display: flex;
         align-items: center;
         gap: 10px;
-        margin: 8px 0;
+        list-style: none;
+      }
+      summary::-webkit-details-marker { display: none; }
+      summary::before { content: "▸"; color: var(--brand); transition: transform 0.15s; }
+      details[open] > summary::before { transform: rotate(90deg); }
+
+      .row {
+        display: grid;
+        grid-template-columns: 170px 1fr;
+        align-items: center;
+        gap: 12px;
+        margin: 11px 0;
       }
       .row label { color: var(--muted); font-size: 13px; }
       input[type='text'], input[type='number'], select {
-        background: #0c1024;
+        background: var(--bg-2);
         border: 1px solid var(--line);
         color: var(--text);
-        border-radius: 6px;
-        padding: 7px 9px;
-        font-size: 14px;
+        border-radius: 9px;
+        padding: 11px 12px;
+        font-size: 16px; /* >=16px evita zoom automatico no mobile */
         width: 100%;
+        min-height: var(--tap);
       }
-      input[type='color'] { width: 48px; height: 30px; border: 1px solid var(--line); background: none; border-radius: 6px; }
-      input[type='file'] { font-size: 12px; color: var(--muted); }
-      .sprite { display: flex; align-items: center; gap: 10px; }
-      .sprite img { width: 40px; height: 40px; object-fit: contain; background: #0c1024; border: 1px solid var(--line); border-radius: 6px; }
-      .lead-field { border: 1px solid var(--line); border-radius: 6px; padding: 10px; margin: 8px 0; }
+      input:focus, select:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18); }
+      input[type='color'] {
+        width: 58px; height: var(--tap); padding: 3px;
+        border: 1px solid var(--line); background: var(--bg-2); border-radius: 9px; cursor: pointer;
+      }
+      input[type='file'] { font-size: 13px; color: var(--muted); max-width: 100%; }
+      input[type='checkbox'] { width: 26px; height: 26px; accent-color: var(--brand); }
+      .sprite { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .sprite img { width: 46px; height: 46px; object-fit: contain; background: var(--bg-2); border: 1px solid var(--line); border-radius: 9px; }
+      .lead-field { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 10px 0; background: rgba(0, 0, 0, 0.15); }
       .lead-field .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-      button {
-        background: var(--accent);
-        color: #1a1300;
-        border: none;
-        border-radius: 6px;
-        padding: 10px 14px;
-        font-weight: 700;
-        cursor: pointer;
-        font-size: 14px;
-      }
-      button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); font-weight: 600; }
-      button.small { padding: 5px 9px; font-size: 12px; }
-      iframe { width: 100%; flex: 1; border: 1px solid var(--line); border-radius: 8px; background: #000; }
-      .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-      .hint { color: var(--muted); font-size: 12px; line-height: 1.5; }
 
-      /* Mobile: 1 coluna com a prévia no topo (grid respeita `order`). */
-      @media (max-width: 760px) {
-        body {
+      /* ================= Mobile / tablet-estreito ========================= */
+      @media (max-width: 900px) {
+        .tabs { display: flex; }
+        .layout {
           grid-template-columns: 1fr;
-          height: auto;
-          min-height: 100vh;
-          overflow: auto;
+          gap: 0;
+          padding: clamp(12px, 4vw, 18px);
+          padding-bottom: 84px; /* respiro para a barra de ação fixa */
         }
-        #side {
-          order: -1;
-          border-left: none;
-          border-bottom: 1px solid var(--line);
+        /* Mostra só o painel da aba ativa. */
+        body[data-tab='edit'] #side { display: none; }
+        body[data-tab='preview'] #form { display: none; }
+        #side { position: static; }
+        .device { aspect-ratio: auto; height: min(70vh, 560px); }
+        .row { grid-template-columns: 1fr; gap: 6px; }
+        .lead-field .grid { grid-template-columns: 1fr; }
+        /* Ações secundárias do header descem; ação primária vira barra fixa. */
+        .top-actions .secondary { display: none; }
+        .mobile-bar {
+          display: flex;
+          position: fixed;
+          left: 0; right: 0; bottom: 0;
+          z-index: 28;
+          gap: 8px;
+          padding: 10px clamp(12px, 4vw, 18px);
+          padding-bottom: max(10px, env(safe-area-inset-bottom));
+          background: rgba(28, 28, 30, 0.94);
+          backdrop-filter: blur(10px);
+          border-top: 1px solid var(--line);
         }
-        #side iframe {
-          height: 42vh;
-          flex: none;
-        }
-        #form {
-          overflow: visible;
-          padding: 16px 16px 60px;
-        }
-        .row {
-          grid-template-columns: 1fr;
-          gap: 4px;
-        }
+        .mobile-bar > * { flex: 1; justify-content: center; }
+      }
+      @media (min-width: 901px) {
+        .mobile-bar { display: none; }
       }
     </style>
   </head>
-  <body>
-    <div id="form">
-      <h1>Editor de Tema</h1>
-      <p class="sub">Monte a aparência da marca e baixe um <code>theme.json</code>. Nenhum código necessário.</p>
-      <div id="sections"></div>
-    </div>
-    <div id="side">
-      <strong>Prévia ao vivo</strong>
-      <iframe id="preview" src="index.html?preview=1" title="Prévia do jogo"></iframe>
-      <div class="actions">
-        <button id="refresh">Atualizar prévia</button>
-        <button id="back" class="ghost">Voltar ao jogo</button>
+  <body data-tab="edit">
+    <header class="topbar">
+      <div class="brand">
+        <h1>Editor de Tema</h1>
+        <p class="sub">Monte a marca e veja ao vivo. Sem código.</p>
       </div>
-      <div class="actions">
-        <button id="save-disk" style="display: none">Salvar no totem</button>
-        <button id="download">Baixar theme.json</button>
-        <label class="ghost" style="padding:10px 14px;border:1px solid var(--line);border-radius:6px;cursor:pointer;font-weight:600;font-size:14px;">
-          Importar…
-          <input id="import" type="file" accept="application/json,.json" style="display:none" />
+      <div class="top-actions">
+        <button id="apply" class="primary" title="Salva e abre o jogo com este tema">✓ Aplicar e voltar</button>
+        <button id="save-disk" class="ghost secondary" style="display: none">Salvar no totem</button>
+        <button id="download" class="ghost secondary">Baixar .json</button>
+        <label class="filebtn ghost secondary">
+          Importar
+          <input id="import" type="file" accept="application/json,.json" />
         </label>
       </div>
-      <p class="hint">A prévia usa o motor real do jogo. As imagens são embutidas no <code>theme.json</code> como data-URI — um único arquivo carrega tudo.</p>
+    </header>
+
+    <nav class="tabs" role="tablist" aria-label="Alternar painel">
+      <button id="tab-edit" class="tab active" type="button">✎ Personalizar</button>
+      <button id="tab-preview" class="tab" type="button">▶ Prévia</button>
+    </nav>
+
+    <main class="layout">
+      <section id="form" aria-label="Controles">
+        <div id="sections"></div>
+      </section>
+
+      <aside id="side" aria-label="Prévia">
+        <div class="preview-card">
+          <div class="preview-head">
+            <strong>PRÉVIA AO VIVO</strong>
+            <span class="dot">motor real</span>
+          </div>
+          <div class="device">
+            <iframe id="preview" src="index.html?preview=1" title="Prévia do jogo"></iframe>
+          </div>
+          <div class="top-actions" style="justify-content: flex-start">
+            <button id="refresh" class="ghost small" type="button">↻ Atualizar prévia</button>
+          </div>
+          <p class="hint">As imagens são embutidas no <code>theme.json</code> como data-URI — um único arquivo carrega tudo.</p>
+        </div>
+      </aside>
+    </main>
+
+    <div class="mobile-bar">
+      <button id="apply-mobile" class="primary" type="button">✓ Aplicar e voltar ao jogo</button>
     </div>
+
     <script type="module" src="/src/editor/editor.ts"></script>
   </body>
 </html>

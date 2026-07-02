@@ -90,3 +90,28 @@ describe('Maze.step', () => {
     expect(m.step({ x: 0, y: 3 }, Direction.Up)).toBeNull();
   });
 });
+
+describe('Maze — porta da casa (tile "D")', () => {
+  // (1,2) e a porta; (1,1) em cima, (1,3) embaixo.
+  const rows = ['#####', '#...#', '#D#.#', '#...#', '#####'];
+  const m = () => Maze.fromAscii(rows);
+
+  it('porta nao e parede nem caminhavel; isDoor a reconhece', () => {
+    const maze = m();
+    expect(maze.isDoor(1, 2)).toBe(true);
+    expect(maze.isWall(1, 2)).toBe(false);
+    expect(maze.isWalkable(1, 2)).toBe(false); // bloqueada no passo comum
+  });
+
+  it('passo comum e bloqueado pela porta nos dois sentidos', () => {
+    const maze = m();
+    expect(maze.step({ x: 1, y: 1 }, Direction.Down)).toBeNull(); // de cima para a porta
+    expect(maze.step({ x: 1, y: 3 }, Direction.Up)).toBeNull(); // de baixo para a porta
+  });
+
+  it('throughDoor libera a passagem pela porta', () => {
+    const maze = m();
+    expect(maze.step({ x: 1, y: 1 }, Direction.Down, { throughDoor: true })).toEqual({ x: 1, y: 2 });
+    expect(maze.step({ x: 1, y: 2 }, Direction.Down, { throughDoor: true })).toEqual({ x: 1, y: 3 });
+  });
+});

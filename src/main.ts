@@ -11,6 +11,7 @@ import { PreloadScene } from './render/scenes/PreloadScene.js';
 import { AttractScene } from './render/scenes/AttractScene.js';
 import { GameScene } from './render/scenes/GameScene.js';
 import { LeadScene } from './render/scenes/LeadScene.js';
+import { LeaderboardScene } from './render/scenes/LeaderboardScene.js';
 import { MAZE_LAYOUT } from './render/maze-layout.js';
 import { TILE, HUD_HEIGHT } from './render/constants.js';
 import { loadActiveTheme, numberToCss } from './render/theme-loader.js';
@@ -53,7 +54,7 @@ async function boot(): Promise<void> {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
-    scene: [PreloadScene, AttractScene, GameScene, LeadScene],
+    scene: [PreloadScene, AttractScene, GameScene, LeadScene, LeaderboardScene],
   });
 
   // As cenas leem do registry global no init(). Setado antes do boot (assincrono),
@@ -61,6 +62,13 @@ async function boot(): Promise<void> {
   game.registry.set('theme', theme);
   game.registry.set('themeBase', base);
   game.registry.set('terminalId', terminal);
+
+  // Hook SO de desenvolvimento (removido do build de producao): expoe o jogo para
+  // testes automatizados poderem avancar frames com `game.step()` mesmo quando o
+  // navegador pausa o requestAnimationFrame (aba em segundo plano).
+  if (import.meta.env.DEV) {
+    (window as unknown as { __kioskGame?: Phaser.Game }).__kioskGame = game;
+  }
 }
 
 void boot();

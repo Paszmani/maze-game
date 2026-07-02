@@ -34,7 +34,11 @@ export class AttractScene extends Phaser.Scene {
     }
 
     if (attract.logo.visible && this.textures.exists(TEX.logo)) {
-      this.add.image(width / 2, height * attract.logo.y, TEX.logo).setScale(attract.logo.scale).setDepth(1);
+      const logo = this.add.image(width / 2, height * attract.logo.y, TEX.logo).setDepth(1);
+      // Encaixa a logo numa caixa maxima (ate ~44% da largura / ~28% da altura)
+      // e SO ENTAO aplica a escala do tema — senao uma imagem grande cobria a tela.
+      const fit = Math.min((width * 0.44) / logo.width, (height * 0.28) / logo.height, 1);
+      logo.setScale(fit * attract.logo.scale);
     }
 
     if (attract.title.visible) {
@@ -96,6 +100,23 @@ export class AttractScene extends Phaser.Scene {
     this.input.keyboard?.once('keydown', start);
 
     this.buildEditorButton(width, height);
+    this.buildLeaderboardButton(height);
+  }
+
+  /** Botao "Placar" (canto inf. esquerdo) — abre o ranking local de pontuacoes. */
+  private buildLeaderboardButton(height: number): void {
+    this.add
+      .text(10, height - 10, '\u{1F3C6} Placar', {
+        fontFamily: 'monospace',
+        fontSize: '15px',
+        color: this.theme.colors.text,
+        backgroundColor: '#000000aa',
+      })
+      .setOrigin(0, 1)
+      .setPadding(8, 6, 8, 6)
+      .setDepth(50)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this.scene.start('leaderboard'));
   }
 
   /** Botao discreto para o operador abrir a tela de customizacao (editor de tema). */

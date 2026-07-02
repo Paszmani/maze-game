@@ -9,14 +9,15 @@ export const DEFAULT_THEME: Theme = {
   id: 'default',
   name: 'Default',
   colors: {
-    maze: 0x1b3a8f,
-    background: 0x000010,
+    // Paleta base preto/cinza: fundo preto puro, paredes em grafite (visiveis).
+    maze: 0x2b2b2b,
+    background: 0x000000,
     pellet: 0xffffff,
     power: 0xffcc00,
     player: 0xffcc00,
-    frightened: 0x2233ff,
-    eaten: 0x556699,
-    uiAccent: 0xe30613,
+    frightened: 0x3355ff,
+    eaten: 0x555555,
+    uiAccent: 0xbbbbbb,
     text: '#ffffff',
     ghosts: {
       blinky: 0xff0000,
@@ -54,9 +55,9 @@ export const DEFAULT_THEME: Theme = {
   },
   attract: {
     showPlayer: true,
-    title: { visible: true, color: 0xe30613, size: 24, y: 0.2 },
-    headline: { visible: true, color: 0xffffff, size: 30, y: 0.4 },
-    cta: { visible: true, color: 0x000010, background: 0xffcc00, size: 26, y: 0.66 },
+    title: { visible: true, color: 0xffffff, size: 24, y: 0.2 },
+    headline: { visible: true, color: 0xbbbbbb, size: 30, y: 0.4 },
+    cta: { visible: true, color: 0x000000, background: 0xffcc00, size: 26, y: 0.66 },
     logo: { visible: true, scale: 1, y: 0.5 },
   },
   leadForm: {
