@@ -12,6 +12,7 @@
 import { PREVIEW_KEY, APPLIED_KEY, loadAppliedTheme } from '../render/theme-loader.js';
 import { getKiosk } from '../shell/bridge.js';
 import { isCapacitorNative, makeCapacitorBridge } from '../platform/capacitor-kiosk.js';
+import { exportTextFile } from '../platform/file-export.js';
 
 // O editor.html NAO roda o main.ts, entao precisa instalar a ponte nativa aqui —
 // senao no Android `getKiosk()` seria undefined e "Aplicar e voltar" nunca
@@ -359,26 +360,25 @@ function buildExport(): Record<string, unknown> {
   return out;
 }
 
-const iframe = document.getElementById('preview') as HTMLIFrameElement;
-let previewTick = 0;
 let timer: number | undefined;
 
-function updatePreview(): void {
+/**
+ * Sem prévia embutida (padrão dos editores dos 3 jogos): o rascunho é salvo em
+ * PREVIEW_KEY e o botão "Testar jogo" abre o jogo real com ?preview=1.
+ */
+function pushDraft(): void {
   localStorage.setItem(PREVIEW_KEY, JSON.stringify(buildExport()));
-  // Caminho relativo: funciona servido (web) e via file:// (Electron).
-  iframe.src = `index.html?preview=1&t=${++previewTick}`;
 }
 
 function schedule(): void {
   if (timer !== undefined) clearTimeout(timer);
-  timer = window.setTimeout(updatePreview, 400);
+  timer = window.setTimeout(pushDraft, 400);
 }
 
 function download(): void {
-  const blob = new Blob([JSON.stringify(buildExport(), null, 2)], { type: 'application/json' });
-  const a = h('a', { href: URL.createObjectURL(blob), download: `${draft.id || 'tema'}.json` });
-  a.click();
-  URL.revokeObjectURL(a.href);
+  // No Android a ancora <a download> nao funciona — o helper decide entre
+  // download (web/Electron) e folha de compartilhamento nativa (Capacitor).
+  void exportTextFile(`${draft.id || 'tema'}.json`, JSON.stringify(buildExport(), null, 2), 'application/json');
 }
 
 function asStr(v: unknown, fb: string): string { return typeof v === 'string' ? v : fb; }
@@ -481,7 +481,11 @@ for (const id of ['apply', 'apply-mobile']) {
   b?.addEventListener('click', () => void applyAndReturn(b));
 }
 
-(document.getElementById('refresh') as HTMLButtonElement).addEventListener('click', updatePreview);
+// Caminho relativo: funciona servido (web) e via file:// (Electron).
+(document.getElementById('test-game') as HTMLButtonElement).addEventListener('click', () => {
+  pushDraft();
+  window.open('index.html?preview=1', '_blank');
+});
 (document.getElementById('download') as HTMLButtonElement).addEventListener('click', download);
 
 // No totem (Electron/Android), botao extra: salva no disco SEM sair do editor.
@@ -519,21 +523,11 @@ if (kiosk) {
   try {
     importDraft(JSON.parse(await file.text()));
     buildAll();
-    updatePreview();
+    pushDraft();
   } catch {
     alert('JSON inválido.');
   }
 });
-
-// Abas Editar/Prévia (so aparecem no mobile; no desktop os dois painéis convivem).
-function setTab(tab: 'edit' | 'preview'): void {
-  document.body.dataset.tab = tab;
-  document.getElementById('tab-edit')?.classList.toggle('active', tab === 'edit');
-  document.getElementById('tab-preview')?.classList.toggle('active', tab === 'preview');
-  if (tab === 'preview') updatePreview(); // garante a prévia fresca ao abrir a aba
-}
-document.getElementById('tab-edit')?.addEventListener('click', () => setTab('edit'));
-document.getElementById('tab-preview')?.addEventListener('click', () => setTab('preview'));
 
 // Pre-carrega o tema atualmente APLICADO para editar sobre ele (e nao recomecar
 // do zero a cada visita). Totem le do disco; web, do localStorage.
@@ -545,7 +539,7 @@ async function init(): Promise<void> {
     /* sem tema salvo ainda: usa o rascunho default */
   }
   buildAll();
-  updatePreview();
+  pushDraft();
 }
 
 void init();

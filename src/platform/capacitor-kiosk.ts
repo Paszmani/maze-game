@@ -18,7 +18,7 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import type { KioskBridge } from '../shell/bridge.js';
 import type { Lead } from '../data/lead-store.js';
-import { leadsToCsv } from '../data/csv-export.js';
+import { CSV_BOM, leadsToCsv } from '../data/csv-export.js';
 
 const DIR = Directory.External;
 
@@ -126,7 +126,7 @@ export function makeCapacitorBridge(): KioskBridge {
       const stamp = (lead.timestamp || new Date().toISOString()).replace(/[:.]/g, '-');
       await writeText(`leads/raw/${stamp}-${lead.terminalId || 'totem'}.json`, JSON.stringify(lead, null, 2));
       // Regenera o CSV consolidado a partir dos JSONs (une colunas de schemas diferentes).
-      await writeText('leads/leads.csv', leadsToCsv(await readAllLeads()));
+      await writeText('leads/leads.csv', CSV_BOM + leadsToCsv(await readAllLeads()));
     },
 
     async revealLeads() {

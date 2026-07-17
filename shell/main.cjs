@@ -100,21 +100,7 @@ function inlineSprites(raw, dir) {
 
 // --- CSV consolidado (uniao de colunas) ------------------------------------
 
-function leadsToCsv(leads) {
-  const meta = ['timestamp', 'terminalId', 'themeId', 'score'];
-  const ids = [];
-  for (const l of leads) for (const k of Object.keys(l.fields || {})) if (!ids.includes(k)) ids.push(k);
-  const cell = (v) => (/[",\r\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
-  const header = [...meta, ...ids];
-  const rows = leads.map((l) => [
-    l.timestamp,
-    l.terminalId,
-    l.themeId,
-    String(l.score),
-    ...ids.map((id) => (l.fields && l.fields[id]) || ''),
-  ]);
-  return [header, ...rows].map((r) => r.map(cell).join(',')).join('\r\n');
-}
+const { leadsToCsv, CSV_BOM } = require('./csv.cjs');
 
 function regenerateCsv(dir) {
   const rawDir = path.join(dir, 'raw');
@@ -128,7 +114,7 @@ function regenerateCsv(dir) {
       }
     })
     .filter(Boolean);
-  fs.writeFileSync(path.join(dir, 'leads.csv'), leadsToCsv(leads), 'utf8');
+  fs.writeFileSync(path.join(dir, 'leads.csv'), CSV_BOM + leadsToCsv(leads), 'utf8');
 }
 
 // --- IPC -------------------------------------------------------------------

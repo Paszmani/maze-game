@@ -5,3 +5,8 @@ dist/
 # Saída de runtime — nunca versionar leads do cliente
 leads/
 release/
+/data/
+
+# Temas salvos pelo operador em runtime (raiz, ao lado do exe em dev).
+# Os temas de exemplo do bundle ficam em public/themes/ e continuam versionados.
+/themes/

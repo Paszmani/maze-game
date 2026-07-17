@@ -13,23 +13,28 @@ tema e leads funcionam igual ao Electron — só que via Filesystem do Android.
 ## Build / rodar
 
 ```
-npm run android:sync     # vite build + copia o dist/ pro android + sincroniza plugins
+npm run android:sync     # typecheck + vite build + copia o dist/ pro android + sincroniza plugins
 npm run android:open     # abre no Android Studio  ->  Run, ou Build > Build APK(s)
+npm run android:apk      # gera o APK direto por linha de comando (sem abrir o Studio)
 ```
 
-Ou por linha de comando (com SDK configurado):
+O `android:apk` (padrão comum aos três jogos, `scripts/build-android.cjs`) acha
+sozinho um JDK 17–21 (prefere o JBR do Android Studio) e roda o Gradle
+`assembleDebug` — APK assinado com a keystore local em
+`android/app/build/outputs/apk/debug/app-debug.apk`, pronto para instalar
+(`adb install` ou copiando o arquivo).
 
-```
-npm run build
-npx cap sync android
-cd android && ./gradlew assembleDebug      # APK em app/build/outputs/apk/debug/
-```
+Depois de adicionar qualquer plugin `@capacitor/*` novo, rode `npm run
+android:sync` de novo antes de reabrir o Android Studio — é o que registra o
+plugin nativo no projeto.
 
-Instale o APK no aparelho (`adb install` ou copiando o arquivo).
+## Exportar / importar tema no Android
 
-Depois de adicionar o plugin `@capacitor/share` (usado no botão de extrair leads
-abaixo), rode `npm run android:sync` de novo antes de reabrir o Android Studio —
-é o que registra o plugin nativo no projeto.
+No editor (⚙ Personalizar), **Exportar tema** abre a folha nativa de
+compartilhamento com o `<id>.json` (e-mail/Drive/WhatsApp — âncora de download
+não funciona no WebView). **Importar** usa o seletor de arquivos do sistema
+normalmente. O tema aplicado fica gravado em disco
+(`themes/<id>/theme.json` + `config.json`), então sobrevive a reaberturas.
 
 ## Extrair o CSV de leads
 

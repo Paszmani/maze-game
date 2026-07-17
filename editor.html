@@ -85,63 +85,15 @@
       .filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
       button.small { padding: 7px 11px; font-size: 12px; min-height: 0; border-radius: 8px; }
 
-      /* ---- Tabs (mobile only) -------------------------------------------- */
-      .tabs {
-        display: none;
-        position: sticky;
-        top: var(--header-h);
-        z-index: 25;
-        gap: 6px;
-        padding: 8px clamp(14px, 3vw, 28px);
-        background: rgba(28, 28, 30, 0.94);
-        backdrop-filter: blur(10px);
-        border-bottom: 1px solid var(--line);
-      }
-      .tab {
-        flex: 1;
-        justify-content: center;
-        background: var(--panel);
-        border: 1px solid var(--line);
-        color: var(--muted);
-        font-weight: 700;
-      }
-      .tab.active { color: var(--text); border-color: var(--brand); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--brand); }
-
-      /* ---- Layout --------------------------------------------------------- */
+      /* ---- Layout (coluna única centrada — padrão dos editores dos 3 jogos;
+              sem prévia embutida: "Testar jogo" abre o jogo real) ----------- */
       .layout {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) clamp(340px, 36vw, 460px);
-        gap: clamp(14px, 2.4vw, 26px);
-        align-items: start;
+        max-width: 860px;
+        margin: 0 auto;
         padding: clamp(14px, 2.4vw, 26px);
       }
       #form { min-width: 0; }
       .lead-note, .sub-lead { color: var(--muted); font-size: 13px; line-height: 1.5; }
-
-      /* ---- Preview side --------------------------------------------------- */
-      #side { position: sticky; top: calc(var(--header-h) + 16px); }
-      .preview-card {
-        background: linear-gradient(180deg, var(--panel-2), var(--panel));
-        border: 1px solid var(--line);
-        border-radius: var(--radius);
-        padding: 14px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-      .preview-head { display: flex; align-items: center; justify-content: space-between; }
-      .preview-head strong { font-size: 13px; letter-spacing: 0.3px; }
-      .preview-head .dot { color: var(--ok); font-size: 11px; display: inline-flex; align-items: center; gap: 5px; }
-      .preview-head .dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); }
-      .device {
-        border-radius: 14px;
-        background: #000;
-        border: 1px solid var(--line);
-        box-shadow: inset 0 0 0 6px rgba(0, 0, 0, 0.6), 0 10px 30px rgba(0, 0, 0, 0.5);
-        overflow: hidden;
-        aspect-ratio: 19 / 21; /* casa com o canvas do jogo (19x19 + HUD) */
-      }
-      iframe { width: 100%; height: 100%; border: 0; display: block; background: #000; }
       .hint { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0; }
 
       /* ---- Sections (accordion cards) ------------------------------------ */
@@ -201,18 +153,10 @@
 
       /* ================= Mobile / tablet-estreito ========================= */
       @media (max-width: 900px) {
-        .tabs { display: flex; }
         .layout {
-          grid-template-columns: 1fr;
-          gap: 0;
           padding: clamp(12px, 4vw, 18px);
           padding-bottom: 84px; /* respiro para a barra de ação fixa */
         }
-        /* Mostra só o painel da aba ativa. */
-        body[data-tab='edit'] #side { display: none; }
-        body[data-tab='preview'] #form { display: none; }
-        #side { position: static; }
-        .device { aspect-ratio: auto; height: min(70vh, 560px); }
         .row { grid-template-columns: 1fr; gap: 6px; }
         .lead-field .grid { grid-template-columns: 1fr; }
         /* Ações secundárias do header descem; ação primária vira barra fixa. */
@@ -236,17 +180,18 @@
       }
     </style>
   </head>
-  <body data-tab="edit">
+  <body>
     <header class="topbar">
       <div class="brand">
         <h1>Editor de Tema</h1>
-        <p class="sub">Monte a marca e veja ao vivo. Sem código.</p>
+        <p class="sub">Monte a marca do totem. Sem código.</p>
       </div>
       <div class="top-actions">
         <button id="apply" class="primary" title="Salva e abre o jogo com este tema">✓ Aplicar e voltar</button>
+        <button id="test-game" class="ghost" title="Abre o jogo real com o rascunho atual">▶ Testar jogo</button>
         <button id="save-disk" class="ghost secondary" style="display: none">Salvar no totem</button>
         <button id="reveal-leads" class="ghost secondary" style="display: none">📂 Leads</button>
-        <button id="download" class="ghost secondary">Baixar .json</button>
+        <button id="download" class="ghost secondary">Exportar tema</button>
         <label class="filebtn ghost secondary">
           Importar
           <input id="import" type="file" accept="application/json,.json" />
@@ -254,31 +199,11 @@
       </div>
     </header>
 
-    <nav class="tabs" role="tablist" aria-label="Alternar painel">
-      <button id="tab-edit" class="tab active" type="button">✎ Personalizar</button>
-      <button id="tab-preview" class="tab" type="button">▶ Prévia</button>
-    </nav>
-
     <main class="layout">
       <section id="form" aria-label="Controles">
         <div id="sections"></div>
+        <p class="hint">As imagens são embutidas no <code>theme.json</code> como data-URI — um único arquivo carrega tudo.</p>
       </section>
-
-      <aside id="side" aria-label="Prévia">
-        <div class="preview-card">
-          <div class="preview-head">
-            <strong>PRÉVIA AO VIVO</strong>
-            <span class="dot">motor real</span>
-          </div>
-          <div class="device">
-            <iframe id="preview" src="index.html?preview=1" title="Prévia do jogo"></iframe>
-          </div>
-          <div class="top-actions" style="justify-content: flex-start">
-            <button id="refresh" class="ghost small" type="button">↻ Atualizar prévia</button>
-          </div>
-          <p class="hint">As imagens são embutidas no <code>theme.json</code> como data-URI — um único arquivo carrega tudo.</p>
-        </div>
-      </aside>
     </main>
 
     <div class="mobile-bar">
