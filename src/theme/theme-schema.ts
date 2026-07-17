@@ -108,7 +108,8 @@ export interface Theme {
   sprites: ThemeSprites;
   audio: ThemeAudio;
   attract: ThemeAttract;
-  leadForm: { fields: LeadField[] };
+  /** `enabled: false` pula a tela de lead ao fim do jogo (volta direto ao attract). */
+  leadForm: { enabled: boolean; fields: LeadField[] };
 }
 
 const GHOST_ORDER: ReadonlyArray<Personality> = ['blinky', 'pinky', 'inky', 'clyde'];
@@ -118,6 +119,13 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
 const str = (v: unknown, fb: string): string => (typeof v === 'string' && v.length > 0 ? v : fb);
+
+/**
+ * Texto visivel ao usuario: STRING VAZIA E VALIDA (o operador pode querer o
+ * elemento em branco) — so cai no default quando o campo nem e string.
+ * `str` continua estrito para ids/cores, onde '' quebraria o jogo.
+ */
+const text = (v: unknown, fb: string): string => (typeof v === 'string' ? v : fb);
 
 const strOrNull = (v: unknown, fb: string | null): string | null =>
   typeof v === 'string' && v.length > 0 ? v : fb;
@@ -162,9 +170,9 @@ function resolveColors(raw: unknown, fb: ThemeColors): ThemeColors {
 function resolveBranding(raw: unknown, fb: ThemeBranding): ThemeBranding {
   const b = isObj(raw) ? raw : {};
   return {
-    attractHeadline: str(b.attractHeadline, fb.attractHeadline),
-    ctaButton: str(b.ctaButton, fb.ctaButton),
-    leadHeadline: str(b.leadHeadline, fb.leadHeadline),
+    attractHeadline: text(b.attractHeadline, fb.attractHeadline),
+    ctaButton: text(b.ctaButton, fb.ctaButton),
+    leadHeadline: text(b.leadHeadline, fb.leadHeadline),
     logo: strOrNull(b.logo, fb.logo),
   };
 }
@@ -251,10 +259,13 @@ function resolveField(v: unknown): LeadField | null {
   return field;
 }
 
-function resolveLeadForm(raw: unknown, fb: { fields: LeadField[] }): { fields: LeadField[] } {
+function resolveLeadForm(raw: unknown, fb: Theme['leadForm']): Theme['leadForm'] {
   const rawFields = isObj(raw) && Array.isArray(raw.fields) ? raw.fields : [];
   const fields = rawFields.map(resolveField).filter((f): f is LeadField => f !== null);
-  return fields.length > 0 ? { fields } : { fields: fb.fields.map((f) => ({ ...f })) };
+  return {
+    enabled: bool(isObj(raw) ? raw.enabled : undefined, fb.enabled),
+    fields: fields.length > 0 ? fields : fb.fields.map((f) => ({ ...f })),
+  };
 }
 
 /** Mescla `raw` (nao confiavel) sobre `fallback`, validando campo a campo. */

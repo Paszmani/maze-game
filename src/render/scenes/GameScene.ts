@@ -62,6 +62,9 @@ export class GameScene extends Phaser.Scene {
   private lastHudText = '';
   // Garante que o avanco automatico para a captura de lead arme uma unica vez.
   private leadAdvanceArmed = false;
+  // Pausa: congela o tick e mostra o menu (retomar / menu inicial).
+  private paused = false;
+  private pauseUi: Phaser.GameObjects.Container | null = null;
 
   // Imagens de sprite, quando o tema as fornece. `null` => desenha forma primitiva.
   private playerImg: Phaser.GameObjects.Image | null = null;
@@ -201,20 +204,34 @@ export class GameScene extends Phaser.Scene {
     // Reset por inatividade cobre quem larga o totem ANTES de terminar a partida.
     this.inactivity = new InactivityMonitor(this, inactivityMs(INACTIVITY_MS), () => this.scene.start('attract'));
     this.leadAdvanceArmed = false;
+
+    // A cena e reutilizada entre partidas — estado de pausa zera aqui.
+    this.paused = false;
+    this.pauseUi = null;
+    this.buildPauseButton();
+    keyboard.on('keydown-ESC', () => this.togglePause());
   }
 
   override update(time: number, delta: number): void {
     this.now = time;
+    if (this.paused) {
+      // Totem largado em pausa: a inatividade ainda recicla para o attract.
+      this.inactivity.update();
+      return;
+    }
     this.readInput();
 
     if (this.state.phase === 'playing') {
       this.inactivity.update();
       this.state.tick(delta);
     } else if (this.state.phase === 'gameover' && !this.leadAdvanceArmed) {
-      // Fim de jogo (vitoria OU derrota): mostra o resultado um instante e segue
-      // direto para a captura de lead — sem "toque para continuar", sem como pular.
+      // Fim de jogo (vitoria OU derrota): mostra o resultado um instante e segue.
+      // Lead habilitado no tema -> formulario (opcional, da pra pular); senao attract.
       this.leadAdvanceArmed = true;
-      this.time.delayedCall(1600, () => this.scene.start('lead', { score: this.state.score }));
+      this.time.delayedCall(1600, () => {
+        if (this.theme.leadForm.enabled) this.scene.start('lead', { score: this.state.score });
+        else this.scene.start('attract');
+      });
     }
 
     this.drawPellets();
@@ -223,6 +240,66 @@ export class GameScene extends Phaser.Scene {
     this.drawFruit();
     this.drawHud();
     this.spawnPopups();
+  }
+
+  // --- Pausa --------------------------------------------------------------
+
+  private buildPauseButton(): void {
+    const btn = this.add
+      .text(this.scale.width - 6, 4, '⏸', {
+        fontFamily: 'monospace',
+        fontSize: '20px',
+        color: this.theme.colors.text,
+        backgroundColor: numberToCss(this.theme.colors.background) + '99',
+      })
+      .setOrigin(1, 0)
+      .setPadding(8, 4, 8, 4)
+      .setDepth(15)
+      .setInteractive({ useHandCursor: true });
+    btn.on('pointerdown', () => this.togglePause());
+  }
+
+  private togglePause(): void {
+    if (this.state.phase !== 'playing') return;
+    if (this.paused) this.resumeGame();
+    else this.pauseGame();
+  }
+
+  private pauseGame(): void {
+    this.paused = true;
+    this.tweens.pauseAll();
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const bg = this.add.rectangle(0, 0, w, h, 0x000000, 0.75).setOrigin(0).setInteractive();
+    const title = this.add
+      .text(w / 2, h * 0.3, 'PAUSADO', { fontFamily: 'monospace', fontSize: '40px', color: this.theme.colors.text })
+      .setOrigin(0.5);
+    const mkBtn = (y: number, label: string, primary: boolean, cb: () => void): Phaser.GameObjects.Text => {
+      const t = this.add
+        .text(w / 2, y, label, {
+          fontFamily: 'monospace',
+          fontSize: '24px',
+          color: primary ? numberToCss(this.theme.colors.background) : this.theme.colors.text,
+          backgroundColor: primary
+            ? numberToCss(this.theme.colors.uiAccent)
+            : numberToCss(this.theme.colors.background) + 'cc',
+        })
+        .setOrigin(0.5)
+        .setPadding(22, 12, 22, 12)
+        .setInteractive({ useHandCursor: true });
+      t.on('pointerdown', cb);
+      return t;
+    };
+    const resume = mkBtn(h * 0.46, 'RETOMAR', true, () => this.resumeGame());
+    const menu = mkBtn(h * 0.58, 'MENU INICIAL', false, () => this.scene.start('attract'));
+    this.pauseUi = this.add.container(0, 0, [bg, title, resume, menu]).setDepth(40);
+  }
+
+  private resumeGame(): void {
+    this.paused = false;
+    this.tweens.resumeAll();
+    this.pauseUi?.destroy(true);
+    this.pauseUi = null;
   }
 
   // --- Fruta e popups ----------------------------------------------------

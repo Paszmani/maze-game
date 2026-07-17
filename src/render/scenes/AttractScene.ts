@@ -51,7 +51,8 @@ export class AttractScene extends Phaser.Scene {
         .setOrigin(0.5);
     }
 
-    if (attract.headline.visible) {
+    // Texto em branco = elemento oculto (o operador pode limpar o campo no editor).
+    if (attract.headline.visible && branding.attractHeadline.trim().length > 0) {
       this.add
         .text(width / 2, height * attract.headline.y, branding.attractHeadline, {
           fontFamily: 'monospace',
@@ -63,7 +64,7 @@ export class AttractScene extends Phaser.Scene {
         .setOrigin(0.5);
     }
 
-    if (attract.cta.visible) {
+    if (attract.cta.visible && branding.ctaButton.trim().length > 0) {
       const cta = this.add
         .text(width / 2, height * attract.cta.y, branding.ctaButton, {
           fontFamily: 'monospace',

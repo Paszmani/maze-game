@@ -60,7 +60,7 @@ interface Draft {
     ghosts: Quad; mazeBackground: string; attractBackground: string;
   };
   attract: DraftAttract;
-  leadForm: { fields: LeadFieldDraft[] };
+  leadForm: { enabled: boolean; fields: LeadFieldDraft[] };
 }
 
 function makeDraft(): Draft {
@@ -83,6 +83,7 @@ function makeDraft(): Draft {
       logo: { visible: true, scale: 1, y: 0.5 },
     },
     leadForm: {
+      enabled: true,
       fields: [
         { id: 'name', label: 'Nome', type: 'text', required: true, options: '' },
         { id: 'email', label: 'E-mail', type: 'email', required: true, options: '' },
@@ -246,6 +247,9 @@ const leadContainer = h('div');
 
 function renderLead(): void {
   leadContainer.replaceChildren();
+  leadContainer.append(
+    row('Capturar leads ao fim do jogo', checkInput(() => draft.leadForm.enabled, (v) => (draft.leadForm.enabled = v))),
+  );
   draft.leadForm.fields.forEach((f, i) => {
     const remove = h('button', { className: 'ghost small', textContent: 'remover campo', type: 'button' });
     remove.addEventListener('click', () => { draft.leadForm.fields.splice(i, 1); renderLead(); schedule(); });
@@ -346,6 +350,7 @@ function buildExport(): Record<string, unknown> {
       logo: { ...draft.attract.logo },
     },
     leadForm: {
+      enabled: draft.leadForm.enabled,
       fields: draft.leadForm.fields
         .filter((f) => f.id && f.label)
         .map((f) => {
@@ -432,6 +437,7 @@ function importDraft(o: any): void {
       draft.attract.logo.y = asNum(o.attract.logo.y, draft.attract.logo.y);
     }
   }
+  if (o.leadForm) draft.leadForm.enabled = asBool(o.leadForm.enabled, draft.leadForm.enabled);
   if (o.leadForm && Array.isArray(o.leadForm.fields)) {
     draft.leadForm.fields = o.leadForm.fields.map((f: any) => ({
       id: asStr(f?.id, ''),

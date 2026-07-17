@@ -136,7 +136,7 @@ export class LeadScene extends Phaser.Scene {
     }
 
     const note = document.createElement('p');
-    note.textContent = 'Preencha os dados para concluir e concorrer.';
+    note.textContent = 'Preencha os dados para concorrer — ou pule se preferir.';
     Object.assign(note.style, {
       margin: '2px 0 0',
       fontSize: '13px',
@@ -162,6 +162,27 @@ export class LeadScene extends Phaser.Scene {
       cursor: 'pointer',
     } satisfies Partial<CSSStyleDeclaration>);
     form.append(submit);
+
+    // Lead e OPCIONAL (padrao dos outros jogos): da para pular sem preencher.
+    const skip = document.createElement('button');
+    skip.type = 'button';
+    skip.textContent = 'Agora não';
+    Object.assign(skip.style, {
+      padding: '10px',
+      fontSize: '15px',
+      border: 'none',
+      borderRadius: '8px',
+      background: 'transparent',
+      color: this.theme.colors.text,
+      opacity: '0.75',
+      cursor: 'pointer',
+      textDecoration: 'underline',
+    } satisfies Partial<CSSStyleDeclaration>);
+    skip.addEventListener('click', () => {
+      this.destroyForm();
+      this.scene.start('attract');
+    });
+    form.append(skip);
 
     form.addEventListener('submit', (e) => {
       e.preventDefault();

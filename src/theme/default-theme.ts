@@ -61,6 +61,7 @@ export const DEFAULT_THEME: Theme = {
     logo: { visible: true, scale: 1, y: 0.5 },
   },
   leadForm: {
+    enabled: true,
     fields: [
       { id: 'name', label: 'Nome', type: 'text', required: true, maxLength: 60 },
       { id: 'email', label: 'E-mail', type: 'email', required: true },
