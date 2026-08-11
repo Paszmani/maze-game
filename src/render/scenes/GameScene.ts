@@ -35,6 +35,7 @@ import type { TimerMode } from './ConfigScene.js';
 import { TILE, INACTIVITY_MS } from '../constants.js';
 import { numberToCss } from '../theme-loader.js';
 import { TEX } from '../textures.js';
+import { powerPelletStyle, isCustomPowerPellet, cardOffset, type PowerPelletStyle } from '../power-pellets.js';
 import type { Theme } from '../../theme/theme-schema.js';
 import { DEFAULT_THEME } from '../../theme/default-theme.js';
 
@@ -58,6 +59,10 @@ export class GameScene extends Phaser.Scene {
   // Sprites de pellet/power quando o tema os fornece (senao ficam vazios -> circulos).
   private pelletImgs: Phaser.GameObjects.Image[] = [];
   private powerImgs: Phaser.GameObjects.Image[] = [];
+  // Power-pellets customizados (card desenhado ou imagem propria), com sua celula.
+  private powerNodes: Array<{ cell: Vec2; node: Phaser.GameObjects.Container | Phaser.GameObjects.Image }> = [];
+  // Power-pellets sem customizacao: bolinha primitiva (blink), como antes.
+  private powerPrimitiveCells: Vec2[] = [];
   private lastRemaining = -1;
   private lastHudText = '';
   // Garante que o avanco automatico para a captura de lead arme uma unica vez.
@@ -146,6 +151,8 @@ export class GameScene extends Phaser.Scene {
     this.powerCells = [];
     this.pelletImgs = [];
     this.powerImgs = [];
+    this.powerNodes = [];
+    this.powerPrimitiveCells = [];
     this.lastRemaining = -1;
     this.lastHudText = '';
 
@@ -170,11 +177,9 @@ export class GameScene extends Phaser.Scene {
         this.add.image(this.center(c.x), this.center(c.y), TEX.pellet).setDisplaySize(TILE * 0.5, TILE * 0.5).setDepth(1),
       );
     }
-    if (this.textures.exists(TEX.power)) {
-      this.powerImgs = this.powerCells.map((c) =>
-        this.add.image(this.center(c.x), this.center(c.y), TEX.power).setDisplaySize(TILE * 0.9, TILE * 0.9).setDepth(1),
-      );
-    }
+    // Power-pellets: cada celula pode ter card/imagem propria (customizacao
+    // individual). As sem estilo caem na bolinha primitiva (themed sprite ou circulo).
+    this.buildPowerPellets(maze.width, maze.height);
 
     this.actorsGfx = this.add.graphics().setDepth(2);
 
@@ -482,18 +487,82 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Power-pellets (so 4): piscam. Usa sprite do tema se houver, senao circulos. */
+  /**
+   * Cria os objetos de cada power-pellet uma vez. Celula com estilo proprio
+   * (rotulo/imagem) vira um "card" grande (ou a imagem); as demais entram na lista
+   * de bolinhas primitivas (themed sprite se o tema tiver, senao circulo).
+   */
+  private buildPowerPellets(cols: number, rows: number): void {
+    for (const cell of this.powerCells) {
+      const style = powerPelletStyle(cell.x, cell.y);
+      if (isCustomPowerPellet(style)) {
+        const off = cardOffset(cell.x, cell.y, cols, rows);
+        const ox = this.center(cell.x) + off.x * TILE;
+        const oy = this.center(cell.y) + off.y * TILE;
+        const w = style.widthTiles * TILE;
+        const h = style.heightTiles * TILE;
+        const key = TEX.powerCustom(cell.x, cell.y);
+        // Depth 3: acima de paredes/pellets, abaixo dos atores (o jogador passa por cima).
+        const node =
+          style.image && this.textures.exists(key)
+            ? this.add.image(ox, oy, key).setDisplaySize(w, h).setDepth(3)
+            : this.buildPowerCard(ox, oy, w, h, style);
+        this.powerNodes.push({ cell, node });
+      } else if (this.textures.exists(TEX.power)) {
+        this.powerImgs.push(
+          this.add.image(this.center(cell.x), this.center(cell.y), TEX.power).setDisplaySize(TILE * 0.9, TILE * 0.9).setDepth(1),
+        );
+        this.powerPrimitiveCells.push(cell);
+      } else {
+        this.powerPrimitiveCells.push(cell);
+      }
+    }
+  }
+
+  /** Monta um card (retangulo arredondado + rotulo auto-ajustado) num Container. */
+  private buildPowerCard(ox: number, oy: number, w: number, h: number, style: PowerPelletStyle): Phaser.GameObjects.Container {
+    const rad = Math.min(10, h * 0.22);
+    const g = this.add.graphics();
+    g.fillStyle(style.fill, 1);
+    g.fillRoundedRect(-w / 2, -h / 2, w, h, rad);
+    g.lineStyle(Math.max(2, TILE * 0.09), style.accent, 1);
+    g.strokeRoundedRect(-w / 2, -h / 2, w, h, rad);
+    const label = this.add
+      .text(0, 0, style.label, {
+        fontFamily: 'monospace',
+        fontStyle: 'bold',
+        fontSize: `${Math.round(h * 0.42)}px`,
+        color: numberToCss(style.text),
+      })
+      .setOrigin(0.5);
+    // Auto-fit: encolhe o texto se ultrapassar a largura util do card.
+    const maxW = w * 0.86;
+    if (label.width > maxW) label.setScale(maxW / label.width);
+    return this.add.container(ox, oy, [g, label]).setDepth(3);
+  }
+
+  /** Power-pellets: cards customizados (pulsam) + bolinhas primitivas (piscam). */
   private drawPowerPellets(): void {
+    const pulse = 1 + Math.sin(this.now * 0.004) * 0.05;
+    for (const { cell, node } of this.powerNodes) {
+      const alive = this.state.pellets.hasPowerPellet(cell.x, cell.y);
+      node.setVisible(alive);
+      if (alive) node.setScale(pulse);
+    }
+
+    if (this.powerPrimitiveCells.length === 0) return;
     const show = this.now % 400 < 280; // fase acesa do pisca
     if (this.powerImgs.length > 0) {
-      this.powerCells.forEach((c, i) => this.powerImgs[i]!.setVisible(show && this.state.pellets.hasPowerPellet(c.x, c.y)));
+      this.powerPrimitiveCells.forEach((c, i) =>
+        this.powerImgs[i]!.setVisible(show && this.state.pellets.hasPowerPellet(c.x, c.y)),
+      );
       return;
     }
     const g = this.pelletsGfx;
     g.clear();
     if (!show) return;
     g.fillStyle(this.theme.colors.power, 1);
-    for (const c of this.powerCells) {
+    for (const c of this.powerPrimitiveCells) {
       if (this.state.pellets.hasPowerPellet(c.x, c.y)) g.fillCircle(this.center(c.x), this.center(c.y), TILE * 0.32);
     }
   }
