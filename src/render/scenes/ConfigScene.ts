@@ -4,7 +4,7 @@
  * O visitante escolhe COMO o tempo corre na partida:
  *   - 'off'       Sem cronometro (jogo classico, sem tempo).
  *   - 'countup'   Contagem crescente ate vencer/perder (so cronometra a sessao).
- *   - 'countdown' Limite de tempo: escolhe-se um valor; ao zerar, a partida acaba.
+ *   - 'countdown' Limite de tempo: DIGITA-SE o valor em segundos; ao zerar, acaba.
  *
  * Alvos de toque grandes e poucos passos (regra de totem). Ao confirmar, inicia a
  * GameScene passando `{ timerMode, timeLimitMs }` — a unica coisa que a cena de
@@ -18,16 +18,22 @@ import { numberToCss } from '../theme-loader.js';
 
 export type TimerMode = 'off' | 'countup' | 'countdown';
 
-const TIME_PRESETS = [30, 60, 90, 120, 180] as const;
+const MIN_SECONDS = 5;
+const MAX_SECONDS = 3600;
+const DEFAULT_SECONDS = 90;
 
 export class ConfigScene extends Phaser.Scene {
   private theme: Theme = DEFAULT_THEME;
   private mode: TimerMode = 'countup';
-  private seconds = 90;
 
   private modeButtons: Array<{ mode: TimerMode; btn: Phaser.GameObjects.Text }> = [];
-  private timeButtons: Array<{ sec: number; btn: Phaser.GameObjects.Text }> = [];
-  private timeRow: Phaser.GameObjects.Container | null = null;
+  // Campo de tempo (DOM): rotulo Phaser + input HTML digitavel (dispara o teclado
+  // numerico no totem/tablet). O input vive no container DOM COMPARTILHADO entre
+  // cenas, entao precisa ser destruido explicitamente ao sair (senao vaza).
+  private timeLabel: Phaser.GameObjects.Text | null = null;
+  private timeHint: Phaser.GameObjects.Text | null = null;
+  private timeInputDom: Phaser.GameObjects.DOMElement | null = null;
+  private timeInput: HTMLInputElement | null = null;
 
   constructor() {
     super('config');
@@ -38,10 +44,11 @@ export class ConfigScene extends Phaser.Scene {
     if (theme) this.theme = theme;
     // Estado zera a cada visita (a cena e reutilizada entre partidas).
     this.mode = 'countup';
-    this.seconds = 90;
     this.modeButtons = [];
-    this.timeButtons = [];
-    this.timeRow = null;
+    this.timeLabel = null;
+    this.timeHint = null;
+    this.timeInputDom = null;
+    this.timeInput = null;
   }
 
   create(): void {
@@ -80,26 +87,30 @@ export class ConfigScene extends Phaser.Scene {
       this.modeButtons.push({ mode: m.mode, btn });
     });
 
-    // Linha de presets de tempo (visivel so no modo 'countdown').
-    const label = this.add
-      .text(cx, height * 0.6, 'TEMPO LIMITE (segundos)', {
+    // Campo digitavel do tempo-limite (visivel so no modo 'countdown').
+    this.timeLabel = this.add
+      .text(cx, height * 0.6, 'DIGITE O TEMPO LIMITE (segundos)', {
         fontFamily: 'monospace',
         fontSize: '16px',
         color: this.theme.colors.text,
       })
       .setOrigin(0.5);
-    const spacing = width / (TIME_PRESETS.length + 1);
-    const chips: Phaser.GameObjects.Text[] = [label];
-    TIME_PRESETS.forEach((sec, i) => {
-      const btn = this.mkButton(spacing * (i + 1), height * 0.68, String(sec), () => {
-        this.seconds = sec;
-        this.refresh();
-      });
-      btn.setPadding(14, 10, 14, 10);
-      this.timeButtons.push({ sec, btn });
-      chips.push(btn);
-    });
-    this.timeRow = this.add.container(0, 0, chips);
+
+    this.timeInput = this.buildTimeInput();
+    this.timeInputDom = this.add.dom(cx, height * 0.68, this.timeInput);
+    this.timeInput.addEventListener('input', () => this.updateHint());
+
+    this.timeHint = this.add
+      .text(cx, height * 0.74, '', {
+        fontFamily: 'monospace',
+        fontSize: '15px',
+        color: this.theme.colors.text,
+      })
+      .setOrigin(0.5);
+
+    // O input DOM vive num container compartilhado — remove ao sair por qualquer via.
+    this.events.once('shutdown', this.destroyInput, this);
+    this.events.once('destroy', this.destroyInput, this);
 
     // JOGAR — confirma e inicia a partida com o timer escolhido.
     const play = this.add
@@ -127,9 +138,32 @@ export class ConfigScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.scene.start('attract'));
 
-    this.input.keyboard?.once('keydown-ENTER', () => this.startGame());
+    this.input.keyboard?.on('keydown-ENTER', () => this.startGame());
 
     this.refresh();
+  }
+
+  /** Input HTML numerico para digitar o tempo-limite em segundos. */
+  private buildTimeInput(): HTMLInputElement {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.inputMode = 'numeric';
+    input.min = String(MIN_SECONDS);
+    input.max = String(MAX_SECONDS);
+    input.step = '5';
+    input.value = String(DEFAULT_SECONDS);
+    Object.assign(input.style, {
+      width: '180px',
+      padding: '14px',
+      fontSize: '26px',
+      textAlign: 'center',
+      borderRadius: '10px',
+      border: `2px solid ${numberToCss(this.theme.colors.maze)}`,
+      background: '#ffffff',
+      color: '#111111',
+      fontFamily: 'monospace',
+    } satisfies Partial<CSSStyleDeclaration>);
+    return input;
   }
 
   /** Botao base de toggle (cores atualizadas por `refresh`). */
@@ -143,7 +177,23 @@ export class ConfigScene extends Phaser.Scene {
     return t;
   }
 
-  /** Aplica o realce da selecao atual e mostra/oculta a linha de tempo. */
+  /** Segundos escolhidos, saneados para o intervalo valido (fallback ao default). */
+  private chosenSeconds(): number {
+    const v = this.timeInput ? Number.parseInt(this.timeInput.value, 10) : DEFAULT_SECONDS;
+    if (!Number.isFinite(v)) return DEFAULT_SECONDS;
+    return Math.min(MAX_SECONDS, Math.max(MIN_SECONDS, v));
+  }
+
+  /** Mostra o tempo digitado como M:SS logo abaixo do campo. */
+  private updateHint(): void {
+    if (!this.timeHint) return;
+    const s = this.chosenSeconds();
+    const mm = Math.floor(s / 60);
+    const ss = (s % 60).toString().padStart(2, '0');
+    this.timeHint.setText(`= ${mm}:${ss}`);
+  }
+
+  /** Aplica o realce da selecao atual e mostra/oculta o campo de tempo. */
   private refresh(): void {
     const accent = numberToCss(this.theme.colors.uiAccent);
     const bg = numberToCss(this.theme.colors.background);
@@ -153,18 +203,23 @@ export class ConfigScene extends Phaser.Scene {
       btn.setBackgroundColor(on ? accent : dim);
       btn.setColor(on ? bg : this.theme.colors.text);
     }
-    for (const { sec, btn } of this.timeButtons) {
-      const on = sec === this.seconds;
-      btn.setBackgroundColor(on ? accent : dim);
-      btn.setColor(on ? bg : this.theme.colors.text);
-    }
-    this.timeRow?.setVisible(this.mode === 'countdown');
+    const showTime = this.mode === 'countdown';
+    this.timeLabel?.setVisible(showTime);
+    this.timeHint?.setVisible(showTime);
+    this.timeInputDom?.setVisible(showTime);
+    if (showTime) this.updateHint();
+  }
+
+  /** Remove o input DOM do container compartilhado. Idempotente. */
+  private destroyInput(): void {
+    this.timeInputDom?.destroy();
+    this.timeInputDom = null;
+    this.timeInput = null;
   }
 
   private startGame(): void {
-    this.scene.start('game', {
-      timerMode: this.mode,
-      timeLimitMs: this.mode === 'countdown' ? this.seconds * 1000 : 0,
-    });
+    const timeLimitMs = this.mode === 'countdown' ? this.chosenSeconds() * 1000 : 0;
+    this.destroyInput();
+    this.scene.start('game', { timerMode: this.mode, timeLimitMs });
   }
 }
