@@ -35,7 +35,7 @@ import type { TimerMode } from './ConfigScene.js';
 import { TILE, INACTIVITY_MS } from '../constants.js';
 import { numberToCss } from '../theme-loader.js';
 import { TEX } from '../textures.js';
-import { powerPelletStyle, isCustomPowerPellet, cardOffset, type PowerPelletStyle } from '../power-pellets.js';
+import { POWER_PELLET_CARD, cardOffset } from '../power-pellets.js';
 import type { Theme } from '../../theme/theme-schema.js';
 import { DEFAULT_THEME } from '../../theme/default-theme.js';
 
@@ -59,9 +59,9 @@ export class GameScene extends Phaser.Scene {
   // Sprites de pellet/power quando o tema os fornece (senao ficam vazios -> circulos).
   private pelletImgs: Phaser.GameObjects.Image[] = [];
   private powerImgs: Phaser.GameObjects.Image[] = [];
-  // Power-pellets customizados (card desenhado ou imagem propria), com sua celula.
-  private powerNodes: Array<{ cell: Vec2; node: Phaser.GameObjects.Container | Phaser.GameObjects.Image }> = [];
-  // Power-pellets sem customizacao: bolinha primitiva (blink), como antes.
+  // Power-pellets com imagem propria (slot do tema), com sua celula.
+  private powerNodes: Array<{ cell: Vec2; node: Phaser.GameObjects.Image }> = [];
+  // Power-pellets sem imagem: bolinha classica (blink), como antes.
   private powerPrimitiveCells: Vec2[] = [];
   private lastRemaining = -1;
   private lastHudText = '';
@@ -193,13 +193,12 @@ export class GameScene extends Phaser.Scene {
     // Uma imagem de fruta por posicao possivel (ocultas ate a fruta acender ali).
     this.fruitImgs = [];
     if (this.textures.exists(TEX.fruit)) {
-      this.fruitImgs = this.fruitPositions.map((c) =>
-        this.add
-          .image(this.center(c.x), this.center(c.y), TEX.fruit)
-          .setDisplaySize(TILE * 0.95, TILE * 0.95)
-          .setDepth(5)
-          .setVisible(false),
-      );
+      this.fruitImgs = this.fruitPositions.map((c) => {
+        const img = this.add.image(this.center(c.x), this.center(c.y), TEX.fruit).setDepth(5).setVisible(false);
+        // Responsivo: cabe em ~1.2 tile preservando a proporcao (nao distorce).
+        this.fitDisplaySize(img, TILE * 1.2, TILE * 1.2);
+        return img;
+      });
     }
 
     this.hud = this.add.text(8, maze.height * TILE + 12, '', {
@@ -488,25 +487,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Cria os objetos de cada power-pellet uma vez. Celula com estilo proprio
-   * (rotulo/imagem) vira um "card" grande (ou a imagem); as demais entram na lista
-   * de bolinhas primitivas (themed sprite se o tema tiver, senao circulo).
+   * Cria os objetos de cada power-pellet uma vez. Slot `i` (ordem dos cantos) com
+   * imagem propria (tema) vira uma IMAGEM grande e responsiva; sem imagem, cai na
+   * bolinha classica (sprite unico do tema se houver, senao circulo desenhado).
    */
   private buildPowerPellets(cols: number, rows: number): void {
-    for (const cell of this.powerCells) {
-      const style = powerPelletStyle(cell.x, cell.y);
-      if (isCustomPowerPellet(style)) {
+    this.powerCells.forEach((cell, i) => {
+      const key = TEX.powerSlot(i);
+      if (this.textures.exists(key)) {
         const off = cardOffset(cell.x, cell.y, cols, rows);
         const ox = this.center(cell.x) + off.x * TILE;
         const oy = this.center(cell.y) + off.y * TILE;
-        const w = style.widthTiles * TILE;
-        const h = style.heightTiles * TILE;
-        const key = TEX.powerCustom(cell.x, cell.y);
         // Depth 3: acima de paredes/pellets, abaixo dos atores (o jogador passa por cima).
-        const node =
-          style.image && this.textures.exists(key)
-            ? this.add.image(ox, oy, key).setDisplaySize(w, h).setDepth(3)
-            : this.buildPowerCard(ox, oy, w, h, style);
+        const node = this.add.image(ox, oy, key).setDepth(3);
+        this.fitDisplaySize(node, POWER_PELLET_CARD.widthTiles * TILE, POWER_PELLET_CARD.heightTiles * TILE);
         this.powerNodes.push({ cell, node });
       } else if (this.textures.exists(TEX.power)) {
         this.powerImgs.push(
@@ -516,38 +510,25 @@ export class GameScene extends Phaser.Scene {
       } else {
         this.powerPrimitiveCells.push(cell);
       }
-    }
+    });
   }
 
-  /** Monta um card (retangulo arredondado + rotulo auto-ajustado) num Container. */
-  private buildPowerCard(ox: number, oy: number, w: number, h: number, style: PowerPelletStyle): Phaser.GameObjects.Container {
-    const rad = Math.min(10, h * 0.22);
-    const g = this.add.graphics();
-    g.fillStyle(style.fill, 1);
-    g.fillRoundedRect(-w / 2, -h / 2, w, h, rad);
-    g.lineStyle(Math.max(2, TILE * 0.09), style.accent, 1);
-    g.strokeRoundedRect(-w / 2, -h / 2, w, h, rad);
-    const label = this.add
-      .text(0, 0, style.label, {
-        fontFamily: 'monospace',
-        fontStyle: 'bold',
-        fontSize: `${Math.round(h * 0.42)}px`,
-        color: numberToCss(style.text),
-      })
-      .setOrigin(0.5);
-    // Auto-fit: encolhe o texto se ultrapassar a largura util do card.
-    const maxW = w * 0.86;
-    if (label.width > maxW) label.setScale(maxW / label.width);
-    return this.add.container(ox, oy, [g, label]).setDepth(3);
+  /**
+   * Ajusta o tamanho de exibicao de uma imagem para caber em (maxW x maxH)
+   * PRESERVANDO a proporcao original — responsivo, sem distorcer o sprite.
+   */
+  private fitDisplaySize(img: Phaser.GameObjects.Image, maxW: number, maxH: number): void {
+    const src = img.texture.getSourceImage() as { width: number; height: number };
+    const iw = src.width || 1;
+    const ih = src.height || 1;
+    const scale = Math.min(maxW / iw, maxH / ih);
+    img.setDisplaySize(iw * scale, ih * scale);
   }
 
-  /** Power-pellets: cards customizados (pulsam) + bolinhas primitivas (piscam). */
+  /** Power-pellets: imagens customizadas (tamanho fixo, sem distorcer) + bolinhas classicas (piscam). */
   private drawPowerPellets(): void {
-    const pulse = 1 + Math.sin(this.now * 0.004) * 0.05;
     for (const { cell, node } of this.powerNodes) {
-      const alive = this.state.pellets.hasPowerPellet(cell.x, cell.y);
-      node.setVisible(alive);
-      if (alive) node.setScale(pulse);
+      node.setVisible(this.state.pellets.hasPowerPellet(cell.x, cell.y));
     }
 
     if (this.powerPrimitiveCells.length === 0) return;

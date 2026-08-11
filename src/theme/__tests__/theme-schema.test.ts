@@ -125,6 +125,19 @@ describe('resolveTheme — sprites', () => {
     expect(resolveTheme({ sprites: { fruit: 'cereja.png' } }).sprites.fruit).toBe('cereja.png');
     expect(resolveTheme({}).sprites.fruit).toBeNull();
   });
+
+  it('power-pellets individuais: sempre 4 slots, cada um imagem ou null', () => {
+    const def = resolveTheme({}).sprites.powerPellets;
+    expect(def).toHaveLength(4);
+    expect(def.every((p) => p === null)).toBe(true);
+
+    const t = resolveTheme({ sprites: { powerPellets: ['a.png', null, 'c.png'] } }).sprites.powerPellets;
+    expect(t).toHaveLength(4);
+    expect(t[0]).toBe('a.png');
+    expect(t[1]).toBeNull();
+    expect(t[2]).toBe('c.png');
+    expect(t[3]).toBeNull();
+  });
 });
 
 describe('resolveTheme — attract (estilo)', () => {

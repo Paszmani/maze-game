@@ -11,8 +11,8 @@ export const TEX = {
   player: 'sprite-player',
   pellet: 'sprite-pellet',
   power: 'sprite-power',
-  /** Imagem propria de um power-pellet especifico (customizacao individual). */
-  powerCustom: (x: number, y: number): string => `sprite-power-${x}-${y}`,
+  /** Imagem propria do power-pellet do slot `i` (0..3, ordem dos cantos). */
+  powerSlot: (i: number): string => `sprite-power-slot-${i}`,
   frightened: 'sprite-frightened',
   fruit: 'sprite-fruit',
   ghost: (p: Personality): string => `sprite-ghost-${p}`,

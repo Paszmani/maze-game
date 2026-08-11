@@ -58,7 +58,14 @@ export interface ThemeGameplay {
 export interface ThemeSprites {
   player: string | null;
   pellet: string | null;
+  /** Sprite unico para TODOS os power-pellets (fallback pequeno). */
   powerPellet: string | null;
+  /**
+   * Imagem PROPRIA de cada power-pellet (4 slots, na ordem dos cantos). Quando um
+   * slot tem imagem, aquele power-pellet e desenhado GRANDE (card) e responsivo;
+   * slot vazio => bolinha classica (ou o `powerPellet` unico, se houver).
+   */
+  powerPellets: (string | null)[];
   frightened: string | null;
   /** Sprite da fruta/coletavel bonus. */
   fruit: string | null;
@@ -195,10 +202,18 @@ function resolveSprites(raw: unknown, fb: ThemeSprites): ThemeSprites {
   } else if (isObj(ghostsRaw)) {
     GHOST_ORDER.forEach((p) => (ghosts[p] = strOrNull(ghostsRaw[p], fb.ghosts[p])));
   }
+  // Power-pellets individuais: sempre 4 slots (ordem dos cantos), caindo no fallback.
+  const ppRaw = s.powerPellets;
+  const powerPellets: (string | null)[] = [];
+  for (let i = 0; i < 4; i++) {
+    const fbv = fb.powerPellets[i] ?? null;
+    powerPellets.push(Array.isArray(ppRaw) ? strOrNull(ppRaw[i], fbv) : fbv);
+  }
   return {
     player: strOrNull(s.player, fb.player),
     pellet: strOrNull(s.pellet, fb.pellet),
     powerPellet: strOrNull(s.powerPellet, fb.powerPellet),
+    powerPellets,
     frightened: strOrNull(s.frightened, fb.frightened),
     fruit: strOrNull(s.fruit, fb.fruit),
     ghosts,

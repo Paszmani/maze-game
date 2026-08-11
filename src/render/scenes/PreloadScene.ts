@@ -13,8 +13,6 @@ import type { Theme } from '../../theme/theme-schema.js';
 import { DEFAULT_THEME } from '../../theme/default-theme.js';
 import { assetUrl } from '../theme-loader.js';
 import { TEX, GHOSTS } from '../textures.js';
-import { POWER } from '../maze-layout.js';
-import { powerPelletStyle } from '../power-pellets.js';
 
 export class PreloadScene extends Phaser.Scene {
   private theme: Theme = DEFAULT_THEME;
@@ -48,11 +46,9 @@ export class PreloadScene extends Phaser.Scene {
     q(TEX.logo, this.theme.branding.logo);
     for (const p of GHOSTS) q(TEX.ghost(p), s.ghosts[p]);
 
-    // Imagens proprias por power-pellet (customizacao individual). So carrega as
-    // que definem `image`; o padrao usa cards desenhados, sem asset externo.
-    for (const cell of POWER) {
-      q(TEX.powerCustom(cell.x, cell.y), powerPelletStyle(cell.x, cell.y).image);
-    }
+    // Imagens proprias por power-pellet (4 slots do tema). Slot vazio => nao carrega
+    // nada; o power-pellet cai na bolinha classica.
+    s.powerPellets.forEach((path, i) => q(TEX.powerSlot(i), path));
   }
 
   create(): void {

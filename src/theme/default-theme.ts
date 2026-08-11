@@ -42,6 +42,7 @@ export const DEFAULT_THEME: Theme = {
     player: null,
     pellet: null,
     powerPellet: null,
+    powerPellets: [null, null, null, null],
     frightened: null,
     fruit: null,
     ghosts: { blinky: null, pinky: null, inky: null, clyde: null },
