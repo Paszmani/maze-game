@@ -2,7 +2,10 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <title>Maze Game</title>
     <style>
       html,
@@ -14,10 +17,19 @@
         touch-action: none;
       }
       /* Viewport explicito: o Phaser (Scale.FIT) precisa de um container com
-         largura real. Em layout flex o #game colapsava para 0 de largura. */
+         largura real. Em layout flex o #game colapsava para 0 de largura.
+         No Android o app desenha edge-to-edge; sem respeitar as areas seguras,
+         a barra de status (topo) e a de navegacao (base) cobriam o jogo. Com
+         `viewport-fit=cover` + `env(safe-area-inset-*)`, o #game fica exatamente
+         na area util: quando as barras estao escondidas (immersive) os insets
+         sao 0 e o jogo ocupa a tela toda; quando aparecem, o conteudo se afasta
+         delas. No desktop/web os insets sao 0 -> comportamento inalterado. */
       #game {
-        width: 100vw;
-        height: 100vh;
+        position: fixed;
+        top: env(safe-area-inset-top, 0px);
+        right: env(safe-area-inset-right, 0px);
+        bottom: env(safe-area-inset-bottom, 0px);
+        left: env(safe-area-inset-left, 0px);
       }
     </style>
   </head>

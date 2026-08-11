@@ -21,17 +21,17 @@ import { Ghost } from '../../core/ghost-ai.js';
 import { GameState } from '../../core/game-state.js';
 import { Direction, type Vec2 } from '../../core/direction.js';
 import { TouchControls } from '../input/touch-controls.js';
-import { isCapacitorNative } from '../../platform/capacitor-kiosk.js';
 import { InactivityMonitor, inactivityMs } from '../input/inactivity.js';
 import {
   MAZE_LAYOUT,
   PLAYER_SPAWN,
   GHOST_SPAWNS,
-  FRUIT_POSITION,
+  FRUIT_POSITIONS,
   HOUSE_INTERIOR,
   HOUSE_DOOR,
   HOUSE_EXIT,
 } from '../maze-layout.js';
+import type { TimerMode } from './ConfigScene.js';
 import { TILE, INACTIVITY_MS } from '../constants.js';
 import { numberToCss } from '../theme-loader.js';
 import { TEX } from '../textures.js';
@@ -69,16 +69,24 @@ export class GameScene extends Phaser.Scene {
   // Imagens de sprite, quando o tema as fornece. `null` => desenha forma primitiva.
   private playerImg: Phaser.GameObjects.Image | null = null;
   private ghostImgs: Array<{ img: Phaser.GameObjects.Image | null; base: string }> = [];
-  private fruitImg: Phaser.GameObjects.Image | null = null;
+  // Uma imagem de fruta por posicao possivel (quando o tema fornece sprite).
+  private fruitPositions: Vec2[] = FRUIT_POSITIONS.map((c) => ({ ...c }));
+  private fruitImgs: Phaser.GameObjects.Image[] = [];
   private now = 0;
+
+  // Temporizador escolhido na tela de configuracao (ConfigScene).
+  private timerMode: TimerMode = 'off';
+  private timeLimitMs = 0;
 
   constructor() {
     super('game');
   }
 
-  init(): void {
+  init(data?: { timerMode?: TimerMode; timeLimitMs?: number }): void {
     const theme = this.registry.get('theme') as Theme | undefined;
     if (theme) this.theme = theme;
+    this.timerMode = data?.timerMode ?? 'off';
+    this.timeLimitMs = data?.timeLimitMs ?? 0;
   }
 
   create(): void {
@@ -110,7 +118,13 @@ export class GameScene extends Phaser.Scene {
         playerSpeed: this.theme.gameplay.playerSpeed,
         ghostSpeed: this.theme.gameplay.ghostSpeed,
         powerDurationMs: this.theme.gameplay.powerDurationMs,
-        fruitPosition: { ...FRUIT_POSITION },
+        // Fruta: 5 posicoes, reaparecendo com frequencia (varias podem coexistir).
+        fruitPositions: this.fruitPositions.map((c) => ({ ...c })),
+        fruitSpawnIntervalMs: 4_000,
+        fruitMaxActive: this.fruitPositions.length,
+        // Temporizador escolhido na ConfigScene.
+        timerMode: this.timerMode,
+        timeLimitMs: this.timeLimitMs,
         houseInterior: HOUSE_INTERIOR.map((c) => ({ ...c })),
         houseDoor: { ...HOUSE_DOOR },
         houseExit: { ...HOUSE_EXIT },
@@ -171,8 +185,17 @@ export class GameScene extends Phaser.Scene {
         : null;
     this.playerImg = sprite(TEX.player);
     this.ghostImgs = ghosts.map((gh) => ({ img: sprite(TEX.ghost(gh.personality)), base: TEX.ghost(gh.personality) }));
-    this.fruitImg = sprite(TEX.fruit);
-    this.fruitImg?.setVisible(false);
+    // Uma imagem de fruta por posicao possivel (ocultas ate a fruta acender ali).
+    this.fruitImgs = [];
+    if (this.textures.exists(TEX.fruit)) {
+      this.fruitImgs = this.fruitPositions.map((c) =>
+        this.add
+          .image(this.center(c.x), this.center(c.y), TEX.fruit)
+          .setDisplaySize(TILE * 0.95, TILE * 0.95)
+          .setDepth(5)
+          .setVisible(false),
+      );
+    }
 
     this.hud = this.add.text(8, maze.height * TILE + 12, '', {
       fontFamily: 'monospace',
@@ -197,9 +220,10 @@ export class GameScene extends Phaser.Scene {
     if (!keyboard) throw new Error('GameScene: teclado indisponivel.');
     this.cursors = keyboard.createCursorKeys();
 
-    // Swipe em qualquer plataforma; d-pad on-screen SO no Android.
+    // Controle por SWIPE em qualquer plataforma (arrastar o dedo vira o player).
+    // O d-pad on-screen (setas) foi removido — no Android poluia a tela.
     // Auto-registra os listeners na cena — nao precisa guardar a referencia.
-    new TouchControls(this, (dir) => this.state.player.queue(dir), { showDpad: isCapacitorNative() });
+    new TouchControls(this, (dir) => this.state.player.queue(dir), { showDpad: false });
 
     // Reset por inatividade cobre quem larga o totem ANTES de terminar a partida.
     this.inactivity = new InactivityMonitor(this, inactivityMs(INACTIVITY_MS), () => this.scene.start('attract'));
@@ -237,7 +261,7 @@ export class GameScene extends Phaser.Scene {
     this.drawPellets();
     this.drawPowerPellets();
     this.drawActors();
-    this.drawFruit();
+    this.drawFruits();
     this.drawHud();
     this.spawnPopups();
   }
@@ -304,17 +328,20 @@ export class GameScene extends Phaser.Scene {
 
   // --- Fruta e popups ----------------------------------------------------
 
-  private drawFruit(): void {
-    const fruit = this.state.fruit;
-    if (this.fruitImg) {
-      if (fruit) this.fruitImg.setVisible(true).setPosition(this.center(fruit.position.x), this.center(fruit.position.y));
-      else this.fruitImg.setVisible(false);
-    } else if (fruit) {
-      // Sem sprite: desenha um coletavel primitivo (no actorsGfx, ja limpo neste frame).
+  private drawFruits(): void {
+    const active = new Set(this.state.fruits.map((f) => `${f.position.x},${f.position.y}`));
+    if (this.fruitImgs.length > 0) {
+      this.fruitPositions.forEach((p, i) => this.fruitImgs[i]!.setVisible(active.has(`${p.x},${p.y}`)));
+      return;
+    }
+    // Sem sprite: desenha cada fruta ativa (no actorsGfx, ja limpo neste frame).
+    for (const f of this.state.fruits) {
+      const cx = this.center(f.position.x);
+      const cy = this.center(f.position.y);
       this.actorsGfx.fillStyle(this.theme.colors.power, 1);
-      this.actorsGfx.fillCircle(this.center(fruit.position.x), this.center(fruit.position.y), TILE * 0.3);
+      this.actorsGfx.fillCircle(cx, cy, TILE * 0.3);
       this.actorsGfx.lineStyle(2, this.theme.colors.uiAccent, 1);
-      this.actorsGfx.strokeCircle(this.center(fruit.position.x), this.center(fruit.position.y), TILE * 0.3);
+      this.actorsGfx.strokeCircle(cx, cy, TILE * 0.3);
     }
   }
 
@@ -355,14 +382,61 @@ export class GameScene extends Phaser.Scene {
     return cell * TILE + TILE / 2;
   }
 
+  /**
+   * Paredes no estilo classico de arcade: traco fino arredondado em vez de blocos
+   * solidos. Para cada celula de parede, desenha so as arestas que dao para um
+   * corredor (vizinho nao-parede), recuadas `m` px para dentro da parede, com
+   * quartos de circulo nos cantos convexos. Paredes de 1 tile viram "linha dupla";
+   * blocos grossos viram contorno. Roda uma vez (camada estatica).
+   */
   private drawWalls(): void {
     const g = this.wallsGfx;
-    g.fillStyle(this.theme.colors.maze, 1);
-    for (let y = 0; y < this.state.maze.height; y++) {
-      for (let x = 0; x < this.state.maze.width; x++) {
-        if (this.state.maze.isWall(x, y)) {
-          g.fillRect(x * TILE, y * TILE, TILE, TILE);
+    const maze = this.state.maze;
+    const m = TILE * 0.22;
+    const r = m;
+    const lw = Math.max(2, TILE * 0.11);
+    const isW = (x: number, y: number): boolean => maze.isWall(x, y);
+    g.lineStyle(lw, this.theme.colors.maze, 1);
+
+    for (let y = 0; y < maze.height; y++) {
+      for (let x = 0; x < maze.width; x++) {
+        if (!isW(x, y)) continue;
+        const px = x * TILE;
+        const py = y * TILE;
+        const left = px + m;
+        const right = px + TILE - m;
+        const top = py + m;
+        const bottom = py + TILE - m;
+        const N = !isW(x, y - 1);
+        const S = !isW(x, y + 1);
+        const Wl = !isW(x - 1, y);
+        const E = !isW(x + 1, y);
+
+        // Arestas retas (recuadas; recuam mais nos cantos convexos para o arco caber).
+        g.beginPath();
+        if (N) {
+          g.moveTo(Wl ? left + r : px, top);
+          g.lineTo(E ? right - r : px + TILE, top);
         }
+        if (S) {
+          g.moveTo(Wl ? left + r : px, bottom);
+          g.lineTo(E ? right - r : px + TILE, bottom);
+        }
+        if (Wl) {
+          g.moveTo(left, N ? top + r : py);
+          g.lineTo(left, S ? bottom - r : py + TILE);
+        }
+        if (E) {
+          g.moveTo(right, N ? top + r : py);
+          g.lineTo(right, S ? bottom - r : py + TILE);
+        }
+        g.strokePath();
+
+        // Cantos convexos: quarto de circulo ligando as duas arestas.
+        if (N && Wl) this.cornerArc(left + r, top + r, r, Math.PI, Math.PI * 1.5);
+        if (N && E) this.cornerArc(right - r, top + r, r, Math.PI * 1.5, Math.PI * 2);
+        if (S && Wl) this.cornerArc(left + r, bottom - r, r, Math.PI * 0.5, Math.PI);
+        if (S && E) this.cornerArc(right - r, bottom - r, r, 0, Math.PI * 0.5);
       }
     }
     this.drawHouseDoor();
@@ -376,6 +450,14 @@ export class GameScene extends Phaser.Scene {
     const h = Math.max(3, TILE * 0.16);
     g.fillStyle(this.theme.colors.frightened, 1);
     g.fillRect(x * TILE + (TILE - w) / 2, y * TILE + TILE - h, w, h);
+  }
+
+  /** Quarto de circulo (canto arredondado de parede), em seu proprio subpath. */
+  private cornerArc(cx: number, cy: number, radius: number, start: number, end: number): void {
+    const g = this.wallsGfx;
+    g.beginPath();
+    g.arc(cx, cy, radius, start, end, false);
+    g.strokePath();
   }
 
   /**
@@ -510,16 +592,27 @@ export class GameScene extends Phaser.Scene {
     g.fillPath();
   }
 
+  /** Formata milissegundos como M:SS para o HUD. */
+  private fmtTime(ms: number): string {
+    const total = Math.max(0, Math.ceil(ms / 1000));
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
   private drawHud(): void {
     const fright = this.state.isFrightened ? '  [FRIGHTENED]' : '';
-    const text = `SCORE ${this.state.score}    VIDAS ${this.state.lives}${fright}`;
+    let timer = '';
+    if (this.state.timerMode === 'countdown') timer = `    TEMPO ${this.fmtTime(this.state.timeRemainingMs)}`;
+    else if (this.state.timerMode === 'countup') timer = `    TEMPO ${this.fmtTime(this.state.elapsedMs)}`;
+    const text = `SCORE ${this.state.score}    VIDAS ${this.state.lives}${timer}${fright}`;
     if (text !== this.lastHudText) {
       this.lastHudText = text;
       this.hud.setText(text);
     }
 
     if (this.state.phase === 'gameover') {
-      const msg = this.state.won ? 'VOCE VENCEU!' : 'FIM DE JOGO';
+      const msg = this.state.isTimeUp ? 'TEMPO ESGOTADO' : this.state.won ? 'VOCE VENCEU!' : 'FIM DE JOGO';
       this.overlay.setText(msg).setVisible(true);
     } else if (this.state.isReady) {
       this.overlay.setText('PRONTO!').setVisible(true);

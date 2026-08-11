@@ -69,9 +69,10 @@ describe('Casa dos fantasmas — saida roteirizada (maze real)', () => {
     expect(gs.maze.step(HOUSE_EXIT, Direction.Down)).toBeNull();
     // ...mas liberado para a rota de fantasma.
     expect(gs.maze.step(HOUSE_EXIT, Direction.Down, { throughDoor: true })).toEqual(HOUSE_DOOR);
-    // De dentro (centro) subir para a porta: idem.
-    expect(gs.maze.step({ x: 9, y: 9 }, Direction.Up)).toBeNull();
-    expect(gs.maze.step({ x: 9, y: 9 }, Direction.Up, { throughDoor: true })).toEqual(HOUSE_DOOR);
+    // De dentro (logo abaixo da porta) subir para ela: idem.
+    const belowDoor = { x: HOUSE_DOOR.x, y: HOUSE_DOOR.y + 1 };
+    expect(gs.maze.step(belowDoor, Direction.Up)).toBeNull();
+    expect(gs.maze.step(belowDoor, Direction.Up, { throughDoor: true })).toEqual(HOUSE_DOOR);
     // A saida em si e caminhavel normal (corredor aberto).
     expect(gs.maze.isWalkable(HOUSE_EXIT.x, HOUSE_EXIT.y)).toBe(true);
   });
@@ -104,10 +105,10 @@ describe('Casa dos fantasmas — saida roteirizada (maze real)', () => {
   // IA greedy dos olhos, que ficavam presos ao redor da casa sem achar a porta.
   // O retorno por BFS tem que trazer os olhos de QUALQUER ponto ate o centro.
   it.each([
-    { x: 9, y: 12 }, // logo abaixo da casa (atras da parede de baixo)
-    { x: 7, y: 11 }, // bolso lateral-inferior
-    { x: 1, y: 1 }, // canto oposto
-    { x: 17, y: 17 }, // outro canto
+    { x: 13, y: 17 }, // logo abaixo da casa (bridge inferior)
+    { x: 6, y: 8 }, // bolso lateral-superior
+    { x: 1, y: 1 }, // canto superior esquerdo
+    { x: 26, y: 29 }, // canto inferior direito
   ])('olhos comidos em (%o) voltam para a casa sem travar', (start) => {
     const gs = build({ dotLimits: { blinky: 0, pinky: 0, inky: 0, clyde: 0 } });
     gs.start();

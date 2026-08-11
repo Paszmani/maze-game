@@ -56,14 +56,25 @@ export interface GameConfig {
   elroyDots2: number;
   elroySpeed1: number;
   elroySpeed2: number;
-  /** Dots (do nivel) que fazem a fruta aparecer (classico: 70 e 170). */
-  fruitDotThresholds: number[];
-  /** Quanto tempo a fruta fica visivel antes de sumir (ms). */
+  /** Posicoes possiveis da fruta bonus. Vazio => fruta desativada. */
+  fruitPositions: Vec2[];
+  /** Intervalo entre aparicoes da fruta (ms). <=0 => nao reaparece. */
+  fruitSpawnIntervalMs: number;
+  /** Maximo de frutas simultaneas na tela. */
+  fruitMaxActive: number;
+  /** Quanto tempo cada fruta fica visivel antes de sumir (ms). */
   fruitDurationMs: number;
   /** Pontos da fruta. */
   fruitValue: number;
-  /** Onde a fruta aparece (classico: logo abaixo da casa). */
-  fruitPosition: Vec2;
+  /**
+   * Temporizador da partida:
+   *   'off'       — sem cronometro (comportamento padrao/historico);
+   *   'countdown' — conta regressiva de `timeLimitMs`; ao zerar, fim de jogo;
+   *   'countup'   — conta crescente ate o jogador vencer ou perder.
+   */
+  timerMode: 'off' | 'countdown' | 'countup';
+  /** Tempo-limite do modo 'countdown' (ms). Ignorado nos demais modos. */
+  timeLimitMs: number;
   /**
    * Casa dos fantasmas (caixa fisica): celulas internas (sem pellets), a porta e
    * a celula-saida logo acima dela. Um fantasma liberado e roteirizado ate a
@@ -102,10 +113,13 @@ export const DEFAULT_CONFIG: Omit<GameConfig, 'schedule'> = {
   elroyDots2: 10,
   elroySpeed1: 1.05,
   elroySpeed2: 1.1,
-  fruitDotThresholds: [70, 170],
+  fruitPositions: [],
+  fruitSpawnIntervalMs: 0,
+  fruitMaxActive: 5,
   fruitDurationMs: 9_500,
   fruitValue: 100,
-  fruitPosition: { x: 9, y: 11 },
+  timerMode: 'off',
+  timeLimitMs: 0,
   // Casa default casada com `maze-layout` (porta em cima, saida logo acima).
   houseInterior: [
     { x: 8, y: 9 },
@@ -190,11 +204,14 @@ export class GameState {
   private releaseTimerMs = 0;
   private readonly returned = new Set<Personality>();
 
-  // Fruta: dots totais do nivel (persistem entre mortes), estado e popups.
-  private totalDots = 0;
-  private fruitActive = false;
-  private fruitRemainingMs = 0;
-  private fruitSpawnedCount = 0;
+  // Fruta: coletaveis ativos (posicao + tempo restante), rodizio e acumulador de
+  // spawn. Varias podem coexistir; reaparecem em intervalo fixo.
+  private activeFruits: Array<{ position: Vec2; remainingMs: number }> = [];
+  private fruitSpawnAcc = 0;
+  private fruitNextIndex = 0;
+  // Temporizador da partida (persiste entre mortes).
+  private timerElapsedMs = 0;
+  private timeUp = false;
   private pendingPopups: ScorePopup[] = [];
 
   private playerAcc = 0;
@@ -272,9 +289,37 @@ export class GameState {
     return this.dotsEaten;
   }
 
-  /** Fruta ativa (posicao + valor) ou `null`. O render desenha; o teste verifica. */
+  /** Primeira fruta ativa (posicao + valor) ou `null` — atalho para render/teste. */
   get fruit(): { position: Vec2; value: number } | null {
-    return this.fruitActive ? { position: this.config.fruitPosition, value: this.config.fruitValue } : null;
+    const f = this.activeFruits[0];
+    return f ? { position: f.position, value: this.config.fruitValue } : null;
+  }
+
+  /** Todas as frutas ativas na tela (o render desenha cada uma). */
+  get fruits(): Array<{ position: Vec2; value: number }> {
+    return this.activeFruits.map((f) => ({ position: f.position, value: this.config.fruitValue }));
+  }
+
+  /** Modo do temporizador configurado. */
+  get timerMode(): GameConfig['timerMode'] {
+    return this.config.timerMode;
+  }
+
+  /** Tempo decorrido de jogo (ms). Base da contagem crescente. */
+  get elapsedMs(): number {
+    return this.timerElapsedMs;
+  }
+
+  /** Tempo restante no modo 'countdown' (ms); 0 nos demais modos. */
+  get timeRemainingMs(): number {
+    return this.config.timerMode === 'countdown'
+      ? Math.max(0, this.config.timeLimitMs - this.timerElapsedMs)
+      : 0;
+  }
+
+  /** Fim de jogo por tempo esgotado (a contagem regressiva chegou a zero). */
+  get isTimeUp(): boolean {
+    return this.timeUp;
   }
 
   /** Devolve e limpa os popups de pontuacao pendentes (o render os consome). */
@@ -320,8 +365,11 @@ export class GameState {
     this.extraLifeAwarded = false;
     this.scoring.reset();
     this.pellets.reset();
-    this.totalDots = this.pellets.remaining();
-    this.fruitSpawnedCount = 0;
+    this.activeFruits = [];
+    this.fruitSpawnAcc = 0;
+    this.fruitNextIndex = 0;
+    this.timerElapsedMs = 0;
+    this.timeUp = false;
     this.pendingPopups = [];
     this.frightenedRemainingMs = 0;
     this.scheduleElapsedMs = 0;
@@ -338,6 +386,10 @@ export class GameState {
 
   tick(dtMs: number): void {
     if (this.phase !== 'playing') return;
+
+    // Temporizador da partida corre mesmo durante a pausa de morte.
+    this.advanceTimer(dtMs);
+    if (this.phase !== 'playing') return; // o tempo pode ter encerrado o jogo
 
     // Sequencia de morte/respawn: tudo CONGELADO enquanto dura.
     if (this.respawnPhase !== 'none') {
@@ -391,17 +443,48 @@ export class GameState {
   // --- Fruta (coletavel bonus) -------------------------------------------
 
   private updateFruit(dtMs: number): void {
-    if (this.fruitActive) {
-      this.fruitRemainingMs -= dtMs;
-      if (this.fruitRemainingMs <= 0) this.fruitActive = false; // expirou
+    // Expira as frutas ativas.
+    if (this.activeFruits.length > 0) {
+      for (const f of this.activeFruits) f.remainingMs -= dtMs;
+      this.activeFruits = this.activeFruits.filter((f) => f.remainingMs > 0);
     }
-    // Dots do nivel (persistem entre mortes) atingiram o proximo limiar?
-    const levelDots = this.totalDots - this.pellets.remaining();
-    const next = this.config.fruitDotThresholds[this.fruitSpawnedCount];
-    if (next !== undefined && levelDots >= next) {
-      this.fruitActive = true;
-      this.fruitRemainingMs = this.config.fruitDurationMs;
-      this.fruitSpawnedCount += 1;
+    // Spawn periodico: a cada intervalo, tenta acender mais uma fruta (em rodizio).
+    const positions = this.config.fruitPositions;
+    if (positions.length === 0 || this.config.fruitSpawnIntervalMs <= 0) return;
+    this.fruitSpawnAcc += dtMs;
+    while (this.fruitSpawnAcc >= this.config.fruitSpawnIntervalMs) {
+      this.fruitSpawnAcc -= this.config.fruitSpawnIntervalMs;
+      this.trySpawnFruit();
+    }
+  }
+
+  /** Acende a proxima posicao de fruta livre (rodizio), respeitando o teto de simultaneas. */
+  private trySpawnFruit(): void {
+    const positions = this.config.fruitPositions;
+    if (this.activeFruits.length >= this.config.fruitMaxActive) return;
+    for (let i = 0; i < positions.length; i++) {
+      const idx = (this.fruitNextIndex + i) % positions.length;
+      const pos = positions[idx]!;
+      if (!this.activeFruits.some((f) => equalsVec(f.position, pos))) {
+        this.activeFruits.push({ position: { ...pos }, remainingMs: this.config.fruitDurationMs });
+        this.fruitNextIndex = (idx + 1) % positions.length;
+        return;
+      }
+    }
+  }
+
+  /**
+   * Avanca o cronometro da partida. No modo regressivo, ao zerar encerra o jogo
+   * (fim por tempo — nao e vitoria nem derrota comum; `isTimeUp` distingue).
+   */
+  private advanceTimer(dtMs: number): void {
+    if (this.config.timerMode === 'off') return;
+    this.timerElapsedMs += dtMs;
+    if (this.config.timerMode === 'countdown' && this.timerElapsedMs >= this.config.timeLimitMs) {
+      this.timerElapsedMs = this.config.timeLimitMs;
+      this.timeUp = true;
+      this.phase = 'gameover';
+      this.won = false;
     }
   }
 
@@ -593,11 +676,12 @@ export class GameState {
       this.scoring.eatPowerPellet();
       this.enterFrightened();
     }
-    // Fruta na celula do jogador.
-    if (this.fruitActive && equalsVec(this.player.position, this.config.fruitPosition)) {
+    // Fruta na celula do jogador (pode haver varias espalhadas pelo mapa).
+    const fi = this.activeFruits.findIndex((f) => equalsVec(this.player.position, f.position));
+    if (fi >= 0) {
+      this.activeFruits.splice(fi, 1);
       this.scoring.score += this.config.fruitValue;
-      this.pendingPopups.push({ value: this.config.fruitValue, position: { ...this.config.fruitPosition } });
-      this.fruitActive = false;
+      this.pendingPopups.push({ value: this.config.fruitValue, position: { ...this.player.position } });
     }
     this.checkExtraLife();
     if (this.pellets.isCleared()) {
@@ -682,8 +766,9 @@ export class GameState {
     this.dotsEaten = 0;
     this.releaseTimerMs = 0;
     this.returned.clear();
-    // Fruta ativa some ao perder a vida (mas o contador de nivel persiste).
-    this.fruitActive = false;
+    // Frutas ativas somem ao perder a vida; o rodizio recomeca (o timer persiste).
+    this.activeFruits = [];
+    this.fruitSpawnAcc = 0;
     this.playerAcc = 0;
     this.ghostAccs = this.ghosts.map(() => 0);
     // Interpolacao e saida da casa reiniciam junto com as posicoes.

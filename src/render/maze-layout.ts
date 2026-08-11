@@ -1,82 +1,92 @@
 /**
- * Layout de labirinto provisorio, gerado em codigo para garantir conectividade
- * (sem erro de digitacao a mao). Padrao de "treliça": pilares nas celulas par/par
- * deixam todos os corredores ligados. Power-pellets nos quatro cantos, tunel na
- * linha central.
+ * Layout de labirinto no estilo classico de arcade (28x31), escrito a mao e
+ * verificado por teste de conectividade (`__tests__/maze-layout.test.ts`), que
+ * faz flood-fill a partir do spawn e garante que todo pellet/power/saida da casa
+ * e alcancavel. Legenda ASCII (mesma do Maze/Pellets):
+ *   '#' parede | '.' pellet | 'o' power-pellet | ' ' caminho sem pellet
+ *   'T' tunel (wrap horizontal) | 'D' porta da casa dos fantasmas
  *
- * No futuro o labirinto pode vir de dado/tema; por ora isto basta para o render
- * do modulo 4. As funcoes do core (Maze/Pellets) leem esta mesma string ASCII.
+ * Simetria esquerda-direita, casa dos fantasmas no centro, tunel na linha do
+ * meio (linha 14). Power-pellets nos quatro "cantos" classicos (mantidos como
+ * estavam: 4 no total). A fruta bonus tem 5 posicoes (ver FRUIT_POSITIONS).
  */
 
 import type { Vec2 } from '../core/direction.js';
 import { Direction } from '../core/direction.js';
 import type { Personality } from '../core/ghost-ai.js';
 
-const WIDTH = 19;
-const HEIGHT = 19;
-const TUNNEL_ROW = 9; // linha impar => corredor aberto de ponta a ponta
-
-const POWER: ReadonlyArray<Vec2> = [
-  { x: 1, y: 1 },
-  { x: WIDTH - 2, y: 1 },
-  { x: 1, y: HEIGHT - 2 },
-  { x: WIDTH - 2, y: HEIGHT - 2 },
+// Grade autoral. Cada linha tem exatamente 28 colunas; o teste valida isso.
+export const MAZE_LAYOUT: ReadonlyArray<string> = [
+  '############################', // 0
+  '#............##............#', // 1
+  '#.####.#####.##.#####.####.#', // 2
+  '#o####.#####.##.#####.####o#', // 3
+  '#.####.#####.##.#####.####.#', // 4
+  '#..........................#', // 5
+  '#.####.##.########.##.####.#', // 6
+  '#.####.##.########.##.####.#', // 7
+  '#......##....##....##......#', // 8
+  '######.#####.##.#####.######', // 9
+  '######.#####.##.#####.######', // 10
+  '######.##..........##.######', // 11
+  '######.##.###D####.##.######', // 12
+  '######.##.#      #.##.######', // 13
+  'T........ #      # ........T', // 14
+  '######.##.#      #.##.######', // 15
+  '######.##.########.##.######', // 16
+  '######.##..........##.######', // 17
+  '######.#####.##.#####.######', // 18
+  '######.#####.##.#####.######', // 19
+  '#............##............#', // 20
+  '#.####.#####.##.#####.####.#', // 21
+  '#.####.#####.##.#####.####.#', // 22
+  '#o..##................##..o#', // 23
+  '###.##.##.########.##.##.###', // 24
+  '###.##.##.########.##.##.###', // 25
+  '#......##....##....##......#', // 26
+  '#.##########.##.##########.#', // 27
+  '#.##########.##.##########.#', // 28
+  '#..........................#', // 29
+  '############################', // 30
 ];
+
+const WIDTH = MAZE_LAYOUT[0]!.length; // 28
+const HEIGHT = MAZE_LAYOUT.length; // 31
+
+/** Power-pellets derivadas do proprio ASCII (celulas 'o') — fonte unica de verdade. */
+export const POWER: ReadonlyArray<Vec2> = MAZE_LAYOUT.flatMap((row, y) =>
+  [...row].flatMap((ch, x) => (ch === 'o' ? [{ x, y }] : [])),
+);
 
 /**
- * Casa dos fantasmas (caixa fisica), estampada sobre a treliça. Caixa de 3x1
- * celulas internas com uma porta 'D' no topo (so rota de fantasma). ' ' =
- * caminhavel sem pellet.
+ * Casa dos fantasmas (caixa fisica): interior de 6x3 celulas (cols 11-16, linhas
+ * 13-15), porta 'D' unica no topo (col 13) e a celula-saida logo acima dela. O
+ * interior ja e ' ' no ASCII (caminhavel, sem pellet). A porta so e atravessavel
+ * pelas rotas de fantasma (saida quando liberado / retorno dos olhos).
  */
-export const HOUSE_INTERIOR: ReadonlyArray<Vec2> = [
-  { x: 8, y: 9 },
-  { x: 9, y: 9 },
-  { x: 10, y: 9 },
+export const HOUSE_INTERIOR: ReadonlyArray<Vec2> = (() => {
+  const cells: Vec2[] = [];
+  for (let y = 13; y <= 15; y++) for (let x = 11; x <= 16; x++) cells.push({ x, y });
+  return cells;
+})();
+export const HOUSE_DOOR: Vec2 = { x: 13, y: 12 };
+export const HOUSE_EXIT: Vec2 = { x: 13, y: 11 };
+
+/** Onde o jogador nasce — no corredor logo abaixo da casa. */
+export const PLAYER_SPAWN: Vec2 = { x: 13, y: 23 };
+
+/**
+ * Posicoes da fruta bonus (100 pts). A original fica logo abaixo da casa; as
+ * outras quatro espalham o coletavel pelo mapa. O core faz a fruta reaparecer
+ * periodicamente, entao varias podem estar visiveis ao mesmo tempo.
+ */
+export const FRUIT_POSITIONS: ReadonlyArray<Vec2> = [
+  { x: 13, y: 17 }, // abaixo da casa (posicao classica)
+  { x: 6, y: 8 },
+  { x: 21, y: 8 },
+  { x: 6, y: 20 },
+  { x: 21, y: 20 },
 ];
-export const HOUSE_DOOR: Vec2 = { x: 9, y: 8 };
-export const HOUSE_EXIT: Vec2 = { x: 9, y: 7 };
-/** Paredes extras que fecham a caixa (alem dos pilares ja existentes da treliça). */
-const HOUSE_WALLS: ReadonlyArray<Vec2> = [
-  { x: 7, y: 9 },
-  { x: 11, y: 9 },
-  { x: 9, y: 10 },
-];
-
-function build(): string[] {
-  const grid: string[][] = [];
-  for (let y = 0; y < HEIGHT; y++) {
-    const row: string[] = [];
-    for (let x = 0; x < WIDTH; x++) {
-      const border = x === 0 || x === WIDTH - 1 || y === 0 || y === HEIGHT - 1;
-      if (border) {
-        row.push(y === TUNNEL_ROW && (x === 0 || x === WIDTH - 1) ? 'T' : '#');
-      } else if (x % 2 === 0 && y % 2 === 0) {
-        row.push('#'); // pilar
-      } else if (POWER.some((p) => p.x === x && p.y === y)) {
-        row.push('o');
-      } else {
-        row.push('.');
-      }
-    }
-    grid.push(row);
-  }
-
-  // Estampa a casa: paredes fecham a caixa; interior fica livre e sem pellet
-  // (' '); a porta e um tile 'D' — bloqueada para todos, exceto as rotas de
-  // fantasma (saida quando liberado, retorno dos olhos).
-  for (const w of HOUSE_WALLS) grid[w.y]![w.x] = '#';
-  for (const c of HOUSE_INTERIOR) grid[c.y]![c.x] = ' ';
-  grid[HOUSE_DOOR.y]![HOUSE_DOOR.x] = 'D';
-
-  return grid.map((row) => row.join(''));
-}
-
-export const MAZE_LAYOUT: ReadonlyArray<string> = build();
-
-export const PLAYER_SPAWN: Vec2 = { x: 9, y: 15 };
-
-/** Onde a fruta aparece — logo abaixo do centro (casa dos fantasmas). */
-export const FRUIT_POSITION: Vec2 = { x: 9, y: 11 };
 
 export interface GhostSpawn {
   personality: Personality;
@@ -86,13 +96,13 @@ export interface GhostSpawn {
   direction: Direction;
 }
 
-const CENTER: Vec2 = { x: 9, y: 9 };
+const CENTER: Vec2 = { x: 13, y: 14 };
 
 // Blinky nasce ja na saida (acima da porta); os demais dentro da caixa e sobem
 // pela porta quando liberados. homeTarget = centro da casa (destino dos olhos).
 export const GHOST_SPAWNS: ReadonlyArray<GhostSpawn> = [
   { personality: 'blinky', position: { ...HOUSE_EXIT }, scatterCorner: { x: WIDTH - 2, y: 1 }, homeTarget: CENTER, direction: Direction.Left },
-  { personality: 'pinky', position: { x: 9, y: 9 }, scatterCorner: { x: 1, y: 1 }, homeTarget: CENTER, direction: Direction.Up },
-  { personality: 'inky', position: { x: 8, y: 9 }, scatterCorner: { x: WIDTH - 2, y: HEIGHT - 2 }, homeTarget: CENTER, direction: Direction.Up },
-  { personality: 'clyde', position: { x: 10, y: 9 }, scatterCorner: { x: 1, y: HEIGHT - 2 }, homeTarget: CENTER, direction: Direction.Up },
+  { personality: 'pinky', position: { x: 13, y: 14 }, scatterCorner: { x: 1, y: 1 }, homeTarget: CENTER, direction: Direction.Up },
+  { personality: 'inky', position: { x: 12, y: 14 }, scatterCorner: { x: WIDTH - 2, y: HEIGHT - 2 }, homeTarget: CENTER, direction: Direction.Up },
+  { personality: 'clyde', position: { x: 15, y: 14 }, scatterCorner: { x: 1, y: HEIGHT - 2 }, homeTarget: CENTER, direction: Direction.Up },
 ];

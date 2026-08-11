@@ -9,6 +9,7 @@
 import Phaser from 'phaser';
 import { PreloadScene } from './render/scenes/PreloadScene.js';
 import { AttractScene } from './render/scenes/AttractScene.js';
+import { ConfigScene } from './render/scenes/ConfigScene.js';
 import { GameScene } from './render/scenes/GameScene.js';
 import { LeadScene } from './render/scenes/LeadScene.js';
 import { LeaderboardScene } from './render/scenes/LeaderboardScene.js';
@@ -54,7 +55,7 @@ async function boot(): Promise<void> {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
-    scene: [PreloadScene, AttractScene, GameScene, LeadScene, LeaderboardScene],
+    scene: [PreloadScene, AttractScene, ConfigScene, GameScene, LeadScene, LeaderboardScene],
   });
 
   // As cenas leem do registry global no init(). Setado antes do boot (assincrono),

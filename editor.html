@@ -194,7 +194,15 @@
         <button id="download" class="ghost secondary">Exportar tema</button>
         <label class="filebtn ghost secondary">
           Importar
-          <input id="import" type="file" accept="application/json,.json" />
+          <!-- accept amplo de proposito: no Android um .json salvo/compartilhado
+               costuma chegar com MIME generico (application/octet-stream) e um
+               filtro estrito o esconderia no seletor de arquivos. A validacao
+               real e o JSON.parse no handler. -->
+          <input
+            id="import"
+            type="file"
+            accept="application/json,.json,text/plain,application/octet-stream,*/*"
+          />
         </label>
       </div>
     </header>

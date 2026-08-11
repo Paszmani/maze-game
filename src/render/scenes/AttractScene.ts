@@ -93,10 +93,10 @@ export class AttractScene extends Phaser.Scene {
     }
 
     const start = (): void => {
-      this.scene.start('game');
+      this.scene.start('config');
     };
-    // Zona de toque (tela toda) inicia o jogo. `topOnly` (default) garante que o
-    // botao de customizar, por cima, receba o toque sem disparar o start.
+    // Zona de toque (tela toda) leva a configuracao do tempo. `topOnly` (default)
+    // garante que o botao de customizar, por cima, receba o toque sem disparar.
     this.add.zone(0, 0, width, height).setOrigin(0, 0).setInteractive().on('pointerdown', start);
     this.input.keyboard?.once('keydown', start);
 
