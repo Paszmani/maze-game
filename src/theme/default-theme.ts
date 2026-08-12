@@ -36,7 +36,9 @@ export const DEFAULT_THEME: Theme = {
     playerSpeed: 1.0,
     ghostSpeed: 0.9,
     powerDurationMs: 6000,
+    fruitAsPower: false,
   },
+  ghostLabel: { enabled: false, color: 0xffffff, texts: ['', '', '', ''] },
   // Sem sprites por padrao -> o render usa formas primitivas (cores acima).
   sprites: {
     player: null,

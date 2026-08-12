@@ -52,6 +52,16 @@ export interface ThemeGameplay {
   playerSpeed: number;
   ghostSpeed: number;
   powerDurationMs: number;
+  /** Se `true`, comer uma fruta dispara o modo frightened (igual a um power-pellet). */
+  fruitAsPower: boolean;
+}
+
+/** Texto opcional exibido embaixo dos fantasmas (marca/mensagem). */
+export interface ThemeGhostLabel {
+  enabled: boolean;
+  color: number;
+  /** Texto por fantasma (ordem blinky, pinky, inky, clyde). Vazio => sem texto naquele. */
+  texts: string[];
 }
 
 /** Caminhos de imagem (relativos a pasta do tema). `null` = usa forma primitiva. */
@@ -112,6 +122,7 @@ export interface Theme {
   colors: ThemeColors;
   branding: ThemeBranding;
   gameplay: ThemeGameplay;
+  ghostLabel: ThemeGhostLabel;
   sprites: ThemeSprites;
   audio: ThemeAudio;
   attract: ThemeAttract;
@@ -190,6 +201,24 @@ function resolveGameplay(raw: unknown, fb: ThemeGameplay): ThemeGameplay {
     playerSpeed: posNum(g.playerSpeed, fb.playerSpeed),
     ghostSpeed: posNum(g.ghostSpeed, fb.ghostSpeed),
     powerDurationMs: posNum(g.powerDurationMs, fb.powerDurationMs),
+    fruitAsPower: bool(g.fruitAsPower, fb.fruitAsPower),
+  };
+}
+
+function resolveGhostLabel(raw: unknown, fb: ThemeGhostLabel): ThemeGhostLabel {
+  const o = isObj(raw) ? raw : {};
+  const textsRaw = o.texts;
+  // Legado: um `text` unico aplicado a todos, quando nao ha `texts`.
+  const legacy = typeof o.text === 'string' ? o.text : null;
+  const texts: string[] = [];
+  for (let i = 0; i < 4; i++) {
+    const fbv = fb.texts[i] ?? '';
+    texts.push(Array.isArray(textsRaw) ? text(textsRaw[i], fbv) : legacy ?? fbv);
+  }
+  return {
+    enabled: bool(o.enabled, fb.enabled),
+    color: parseHex(o.color, fb.color),
+    texts,
   };
 }
 
@@ -292,6 +321,7 @@ export function resolveTheme(raw: unknown, fallback: Theme = DEFAULT_THEME): The
     colors: resolveColors(r.colors, fallback.colors),
     branding: resolveBranding(r.branding, fallback.branding),
     gameplay: resolveGameplay(r.gameplay, fallback.gameplay),
+    ghostLabel: resolveGhostLabel(r.ghostLabel, fallback.ghostLabel),
     sprites: resolveSprites(r.sprites, fallback.sprites),
     audio: resolveAudio(r.audio, fallback.audio),
     attract: resolveAttract(r.attract, fallback.attract),

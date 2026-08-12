@@ -11,12 +11,22 @@
  *   data/leads/         -> SAIDA: leads.csv + raw/<...>.json  (o CSV dos leads)
  */
 
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, protocol, net } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
+const { pathToFileURL } = require('node:url');
 
 const APP_ROOT = path.join(__dirname, '..');
+const APP_DIST = path.join(APP_ROOT, 'dist');
 const DEV_URL = process.env.KIOSK_DEV_URL;
+
+// O jogo e servido por um esquema PROPRIO (`app://`) em vez de `file://`. Motivo:
+// o bundle do Vite usa modulos ES com code-splitting (main importa outros chunks);
+// o Chromium bloqueia import de modulo por CORS sobre `file://`, deixando a janela
+// em branco no .exe empacotado. Sob um esquema standard/secure isso funciona.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } },
+]);
 
 // --- Caminhos de disco -----------------------------------------------------
 
@@ -84,18 +94,25 @@ function inlineField(obj, key, dir) {
   if (typeof v === 'string' && v && !/^(data:|https?:)/.test(v)) obj[key] = toDataUri(dir, v);
 }
 
+// Embute como data-URI cada caminho relativo de imagem de um array (ghosts, powerPellets).
+function inlineArray(arr, dir) {
+  return arr.map((v) => (typeof v === 'string' && v && !/^(data:|https?:)/.test(v) ? toDataUri(dir, v) : v));
+}
+
 function inlineSprites(raw, dir) {
   if (raw.branding) inlineField(raw.branding, 'logo', dir);
   const s = raw.sprites;
   if (!s) return;
-  for (const k of ['player', 'pellet', 'powerPellet', 'frightened', 'mazeBackground', 'attractBackground']) {
+  for (const k of ['player', 'pellet', 'powerPellet', 'frightened', 'fruit', 'mazeBackground', 'attractBackground']) {
     inlineField(s, k, dir);
   }
   if (Array.isArray(s.ghosts)) {
-    s.ghosts = s.ghosts.map((g) => (typeof g === 'string' && g && !/^(data:|https?:)/.test(g) ? toDataUri(dir, g) : g));
+    s.ghosts = inlineArray(s.ghosts, dir);
   } else if (s.ghosts && typeof s.ghosts === 'object') {
     for (const k of Object.keys(s.ghosts)) inlineField(s.ghosts, k, dir);
   }
+  // Power-pellets individuais (4 slots): mesmo tratamento dos ghosts em array.
+  if (Array.isArray(s.powerPellets)) s.powerPellets = inlineArray(s.powerPellets, dir);
 }
 
 // --- CSV consolidado (uniao de colunas) ------------------------------------
@@ -190,12 +207,30 @@ function createWindow() {
   });
 
   if (DEV_URL) win.loadURL(DEV_URL);
-  else win.loadFile(path.join(APP_ROOT, 'dist', 'index.html'));
+  else win.loadURL('app://-/index.html');
 
   return win;
 }
 
+/**
+ * Serve os arquivos de `dist/` pelo esquema `app://`. A URL `app://-/<caminho>`
+ * mapeia para `dist/<caminho>` (host '-' e so um placeholder). Guarda contra
+ * path traversal para nunca sair da pasta do bundle.
+ */
+function registerAppProtocol() {
+  protocol.handle('app', (req) => {
+    let rel = decodeURIComponent(new URL(req.url).pathname);
+    if (rel === '/' || rel === '') rel = '/index.html';
+    const file = path.normalize(path.join(APP_DIST, rel));
+    if (file !== APP_DIST && !file.startsWith(APP_DIST + path.sep)) {
+      return new Response('Forbidden', { status: 403 });
+    }
+    return net.fetch(pathToFileURL(file).toString());
+  });
+}
+
 app.whenReady().then(() => {
+  if (!DEV_URL) registerAppProtocol();
   registerIpc();
   createWindow();
   app.on('activate', () => {

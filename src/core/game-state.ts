@@ -66,6 +66,8 @@ export interface GameConfig {
   fruitDurationMs: number;
   /** Pontos da fruta. */
   fruitValue: number;
+  /** Se `true`, comer uma fruta tambem dispara o frightened (como um power-pellet). */
+  fruitAsPower: boolean;
   /**
    * Temporizador da partida:
    *   'off'       — sem cronometro (comportamento padrao/historico);
@@ -118,6 +120,7 @@ export const DEFAULT_CONFIG: Omit<GameConfig, 'schedule'> = {
   fruitMaxActive: 5,
   fruitDurationMs: 9_500,
   fruitValue: 100,
+  fruitAsPower: false,
   timerMode: 'off',
   timeLimitMs: 0,
   // Casa default casada com `maze-layout` (porta em cima, saida logo acima).
@@ -682,6 +685,8 @@ export class GameState {
       this.activeFruits.splice(fi, 1);
       this.scoring.score += this.config.fruitValue;
       this.pendingPopups.push({ value: this.config.fruitValue, position: { ...this.player.position } });
+      // Opcional (tema): a fruta tambem assusta os fantasmas, como um power-pellet.
+      if (this.config.fruitAsPower) this.enterFrightened();
     }
     this.checkExtraLife();
     if (this.pellets.isCleared()) {

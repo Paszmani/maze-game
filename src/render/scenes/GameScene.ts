@@ -74,6 +74,8 @@ export class GameScene extends Phaser.Scene {
   // Imagens de sprite, quando o tema as fornece. `null` => desenha forma primitiva.
   private playerImg: Phaser.GameObjects.Image | null = null;
   private ghostImgs: Array<{ img: Phaser.GameObjects.Image | null; base: string }> = [];
+  // Texto opcional embaixo de cada fantasma (um por fantasma; vazio se desativado).
+  private ghostLabels: Phaser.GameObjects.Text[] = [];
   // Uma imagem de fruta por posicao possivel (quando o tema fornece sprite).
   private fruitPositions: Vec2[] = FRUIT_POSITIONS.map((c) => ({ ...c }));
   private fruitImgs: Phaser.GameObjects.Image[] = [];
@@ -127,6 +129,8 @@ export class GameScene extends Phaser.Scene {
         fruitPositions: this.fruitPositions.map((c) => ({ ...c })),
         fruitSpawnIntervalMs: 4_000,
         fruitMaxActive: this.fruitPositions.length,
+        // Tema: fruta pode ativar o frightened como um power-pellet.
+        fruitAsPower: this.theme.gameplay.fruitAsPower,
         // Temporizador escolhido na ConfigScene.
         timerMode: this.timerMode,
         timeLimitMs: this.timeLimitMs,
@@ -190,6 +194,25 @@ export class GameScene extends Phaser.Scene {
         : null;
     this.playerImg = sprite(TEX.player);
     this.ghostImgs = ghosts.map((gh) => ({ img: sprite(TEX.ghost(gh.personality)), base: TEX.ghost(gh.personality) }));
+
+    // Texto opcional embaixo dos fantasmas (habilitado no editor de tema). Um Text
+    // por fantasma, reposicionado a cada frame em drawActors. Vazio => sem texto.
+    this.ghostLabels = [];
+    const gl = this.theme.ghostLabel;
+    if (gl.enabled) {
+      this.ghostLabels = ghosts.map((_, i) =>
+        this.add
+          .text(0, 0, (gl.texts[i] ?? '').trim(), {
+            fontFamily: 'monospace',
+            fontSize: '11px',
+            color: numberToCss(gl.color),
+            align: 'center',
+          })
+          .setOrigin(0.5, 0)
+          .setDepth(6)
+          .setVisible(false),
+      );
+    }
     // Uma imagem de fruta por posicao possivel (ocultas ate a fruta acender ali).
     this.fruitImgs = [];
     if (this.textures.exists(TEX.fruit)) {
@@ -603,6 +626,10 @@ export class GameScene extends Phaser.Scene {
       if (ghost.houseState === 'inside') {
         pos = { x: this.center(ghost.position.x), y: this.center(ghost.position.y) + Math.sin(this.now * 0.005) * 3 };
       }
+      // Texto opcional embaixo do fantasma, acompanhando a posicao. So aparece
+      // quando aquele fantasma tem texto proprio (celula vazia => sem rotulo).
+      const label = this.ghostLabels[i];
+      if (label && label.text) label.setPosition(pos.x, pos.y + TILE * 0.5).setVisible(true);
       const flash = ghost.mode === 'frightened' && this.state.frightenedRemainingMs < 2000 && this.now % 250 < 125;
       const ref = this.ghostImgs[i];
 

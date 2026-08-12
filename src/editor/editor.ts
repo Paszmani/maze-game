@@ -54,7 +54,8 @@ interface Draft {
     frightened: string; eaten: string; uiAccent: string; text: string; ghosts: Quad;
   };
   branding: { attractHeadline: string; ctaButton: string; leadHeadline: string; logo: string };
-  gameplay: { playerSpeed: number; ghostSpeed: number; powerDurationMs: number };
+  gameplay: { playerSpeed: number; ghostSpeed: number; powerDurationMs: number; fruitAsPower: boolean };
+  ghostLabel: { enabled: boolean; color: string; texts: Quad };
   sprites: {
     player: string; pellet: string; frightened: string; fruit: string;
     powerPellets: Quad; ghosts: Quad; mazeBackground: string; attractBackground: string;
@@ -73,7 +74,8 @@ function makeDraft(): Draft {
       ghosts: ['#ff0000', '#ff66cc', '#00ffff', '#ff9900'],
     },
     branding: { attractHeadline: 'DESVIE. COLETE. VENÇA.', ctaButton: 'TOCAR PARA JOGAR', leadHeadline: 'Cadastre-se e concorra a um brinde!', logo: '' },
-    gameplay: { playerSpeed: 1.0, ghostSpeed: 0.9, powerDurationMs: 6000 },
+    gameplay: { playerSpeed: 1.0, ghostSpeed: 0.9, powerDurationMs: 6000, fruitAsPower: false },
+    ghostLabel: { enabled: false, color: '#ffffff', texts: ['', '', '', ''] },
     sprites: { player: '', pellet: '', frightened: '', fruit: '', powerPellets: ['', '', '', ''], ghosts: ['', '', '', ''], mazeBackground: '', attractBackground: '' },
     attract: {
       showPlayer: true,
@@ -321,6 +323,16 @@ function buildAll(): void {
     row('Velocidade do player', numberInput(() => draft.gameplay.playerSpeed, (v) => (draft.gameplay.playerSpeed = v), 0.05)),
     row('Velocidade dos fantasmas', numberInput(() => draft.gameplay.ghostSpeed, (v) => (draft.gameplay.ghostSpeed = v), 0.05)),
     row('Duração do power (ms)', numberInput(() => draft.gameplay.powerDurationMs, (v) => (draft.gameplay.powerDurationMs = v), 500)),
+    row('Fruta ativa o frightened (como power-pellet)', checkInput(() => draft.gameplay.fruitAsPower, (v) => (draft.gameplay.fruitAsPower = v))),
+  ));
+
+  sections.append(section('Texto nos fantasmas', false,
+    row('Mostrar texto embaixo dos inimigos', checkInput(() => draft.ghostLabel.enabled, (v) => (draft.ghostLabel.enabled = v))),
+    row('Cor do texto', colorInput(() => draft.ghostLabel.color, (v) => (draft.ghostLabel.color = v))),
+    // Texto proprio por fantasma (vazio => aquele fica sem rotulo).
+    ...GHOST_LABELS.map((label, i) =>
+      row(`Texto — ${label}`, textInput(() => draft.ghostLabel.texts[i]!, (v) => (draft.ghostLabel.texts[i] = v))),
+    ),
   ));
 
   renderLead();
@@ -349,6 +361,7 @@ function buildExport(): Record<string, unknown> {
       ...(draft.branding.logo ? { logo: draft.branding.logo } : {}),
     },
     gameplay: { ...draft.gameplay },
+    ghostLabel: { enabled: draft.ghostLabel.enabled, color: draft.ghostLabel.color, texts: [...draft.ghostLabel.texts] },
     attract: {
       showPlayer: draft.attract.showPlayer,
       title: { ...draft.attract.title },
@@ -419,6 +432,18 @@ function importDraft(o: any): void {
     draft.gameplay.playerSpeed = asNum(o.gameplay.playerSpeed, draft.gameplay.playerSpeed);
     draft.gameplay.ghostSpeed = asNum(o.gameplay.ghostSpeed, draft.gameplay.ghostSpeed);
     draft.gameplay.powerDurationMs = asNum(o.gameplay.powerDurationMs, draft.gameplay.powerDurationMs);
+    draft.gameplay.fruitAsPower = asBool(o.gameplay.fruitAsPower, draft.gameplay.fruitAsPower);
+  }
+  if (o.ghostLabel) {
+    draft.ghostLabel.enabled = asBool(o.ghostLabel.enabled, draft.ghostLabel.enabled);
+    draft.ghostLabel.color = asStr(o.ghostLabel.color, draft.ghostLabel.color);
+    const tx = o.ghostLabel.texts;
+    if (Array.isArray(tx)) {
+      GHOST_LABELS.forEach((_, i) => (draft.ghostLabel.texts[i] = asStr(tx[i], draft.ghostLabel.texts[i]!)));
+    } else if (typeof o.ghostLabel.text === 'string') {
+      // Legado: um texto unico -> replica para os quatro.
+      draft.ghostLabel.texts = [o.ghostLabel.text, o.ghostLabel.text, o.ghostLabel.text, o.ghostLabel.text];
+    }
   }
   if (o.sprites) {
     for (const f of SPRITE_FIELDS) draft.sprites[f.key] = asStr(o.sprites[f.key], draft.sprites[f.key]);

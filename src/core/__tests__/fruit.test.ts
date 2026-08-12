@@ -22,6 +22,28 @@ function build(cfg: Partial<GameConfig>, dir: Direction = Direction.None): GameS
 
 const at = (v: Vec2): Partial<GameConfig> => ({ fruitPositions: [v] });
 
+describe('Fruta — efeito de power-pellet (fruitAsPower)', () => {
+  it('com fruitAsPower, comer a fruta dispara o frightened', () => {
+    const gs = build(
+      { ...at({ x: 4, y: 1 }), fruitSpawnIntervalMs: 100, fruitDurationMs: 10_000, fruitAsPower: true, powerDurationMs: 5_000 },
+      Direction.Right,
+    );
+    gs.start();
+    for (let i = 0; i < 3; i++) gs.tick(100); // chega em (4,1) e come a fruta
+    expect(gs.isFrightened).toBe(true);
+  });
+
+  it('sem fruitAsPower (padrao), comer a fruta NAO dispara o frightened', () => {
+    const gs = build(
+      { ...at({ x: 4, y: 1 }), fruitSpawnIntervalMs: 100, fruitDurationMs: 10_000, powerDurationMs: 5_000 },
+      Direction.Right,
+    );
+    gs.start();
+    for (let i = 0; i < 3; i++) gs.tick(100);
+    expect(gs.isFrightened).toBe(false);
+  });
+});
+
 describe('Fruta — spawn periodico', () => {
   it('aparece ao cruzar o intervalo de spawn', () => {
     const gs = build({ ...at({ x: 4, y: 1 }), fruitSpawnIntervalMs: 300, fruitDurationMs: 10_000 });
