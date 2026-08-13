@@ -14,7 +14,7 @@ import { GameScene } from './render/scenes/GameScene.js';
 import { LeadScene } from './render/scenes/LeadScene.js';
 import { LeaderboardScene } from './render/scenes/LeaderboardScene.js';
 import { MAZE_LAYOUT } from './render/maze-layout.js';
-import { TILE, HUD_HEIGHT } from './render/constants.js';
+import { TILE, TILE_Y, HUD_HEIGHT } from './render/constants.js';
 import { loadActiveTheme, numberToCss } from './render/theme-loader.js';
 import { getKiosk } from './shell/bridge.js';
 import { isCapacitorNative, makeCapacitorBridge } from './platform/capacitor-kiosk.js';
@@ -46,7 +46,7 @@ async function boot(): Promise<void> {
     type: Phaser.AUTO,
     parent: 'game',
     width: cols * TILE,
-    height: rows * TILE + HUD_HEIGHT,
+    height: rows * TILE_Y + HUD_HEIGHT,
     backgroundColor: numberToCss(theme.colors.background),
     pixelArt: true,
     // Necessario para os inputs HTML do formulario de lead (LeadScene).

@@ -9,6 +9,10 @@
  * Simetria esquerda-direita, casa dos fantasmas no centro, tunel na linha do
  * meio (linha 14). Power-pellets nos quatro "cantos" classicos (mantidos como
  * estavam: 4 no total). A fruta bonus tem 5 posicoes (ver FRUIT_POSITIONS).
+ *
+ * O "achatamento" (deixar o mapa mais quadrado) e so de RENDER: a celula usa
+ * largura `TILE` e altura menor `TILE_Y` (ver constants.ts). O formato/grade
+ * abaixo NAO muda.
  */
 
 import type { Vec2 } from '../core/direction.js';

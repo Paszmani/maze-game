@@ -74,7 +74,7 @@ function makeDraft(): Draft {
       ghosts: ['#ff0000', '#ff66cc', '#00ffff', '#ff9900'],
     },
     branding: { attractHeadline: 'DESVIE. COLETE. VENÇA.', ctaButton: 'TOCAR PARA JOGAR', leadHeadline: 'Cadastre-se e concorra a um brinde!', logo: '' },
-    gameplay: { playerSpeed: 1.0, ghostSpeed: 0.9, powerDurationMs: 6000, fruitAsPower: false },
+    gameplay: { playerSpeed: 1.15, ghostSpeed: 0.8, powerDurationMs: 7500, fruitAsPower: false },
     ghostLabel: { enabled: false, color: '#ffffff', texts: ['', '', '', ''] },
     sprites: { player: '', pellet: '', frightened: '', fruit: '', powerPellets: ['', '', '', ''], ghosts: ['', '', '', ''], mazeBackground: '', attractBackground: '' },
     attract: {

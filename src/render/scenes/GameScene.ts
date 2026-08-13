@@ -32,7 +32,7 @@ import {
   HOUSE_EXIT,
 } from '../maze-layout.js';
 import type { TimerMode } from './ConfigScene.js';
-import { TILE, INACTIVITY_MS } from '../constants.js';
+import { TILE, TILE_Y, INACTIVITY_MS } from '../constants.js';
 import { numberToCss } from '../theme-loader.js';
 import { TEX } from '../textures.js';
 import { POWER_PELLET_CARD, cardOffset } from '../power-pellets.js';
@@ -145,8 +145,8 @@ export class GameScene extends Phaser.Scene {
     // Fundo opcional do labirinto (atras de tudo).
     if (this.textures.exists(TEX.mazeBg)) {
       this.add
-        .image((maze.width * TILE) / 2, (maze.height * TILE) / 2, TEX.mazeBg)
-        .setDisplaySize(maze.width * TILE, maze.height * TILE)
+        .image((maze.width * TILE) / 2, (maze.height * TILE_Y) / 2, TEX.mazeBg)
+        .setDisplaySize(maze.width * TILE, maze.height * TILE_Y)
         .setDepth(-1);
     }
 
@@ -178,7 +178,7 @@ export class GameScene extends Phaser.Scene {
     // Sprites de pellet/power do tema (quando houver): substituem os circulos.
     if (this.textures.exists(TEX.pellet)) {
       this.pelletImgs = this.pelletCells.map((c) =>
-        this.add.image(this.center(c.x), this.center(c.y), TEX.pellet).setDisplaySize(TILE * 0.5, TILE * 0.5).setDepth(1),
+        this.add.image(this.cx(c.x), this.cy(c.y), TEX.pellet).setDisplaySize(TILE * 0.5, TILE * 0.5).setDepth(1),
       );
     }
     // Power-pellets: cada celula pode ter card/imagem propria (customizacao
@@ -217,21 +217,21 @@ export class GameScene extends Phaser.Scene {
     this.fruitImgs = [];
     if (this.textures.exists(TEX.fruit)) {
       this.fruitImgs = this.fruitPositions.map((c) => {
-        const img = this.add.image(this.center(c.x), this.center(c.y), TEX.fruit).setDepth(5).setVisible(false);
+        const img = this.add.image(this.cx(c.x), this.cy(c.y), TEX.fruit).setDepth(5).setVisible(false);
         // Responsivo: cabe em ~1.2 tile preservando a proporcao (nao distorce).
-        this.fitDisplaySize(img, TILE * 1.2, TILE * 1.2);
+        this.fitDisplaySize(img, TILE * 1.2, TILE_Y * 1.2);
         return img;
       });
     }
 
-    this.hud = this.add.text(8, maze.height * TILE + 12, '', {
+    this.hud = this.add.text(8, maze.height * TILE_Y + 12, '', {
       fontFamily: 'monospace',
       fontSize: '22px',
       color: this.theme.colors.text,
     }).setDepth(10);
 
     this.overlay = this.add
-      .text(this.scale.width / 2, (maze.height * TILE) / 2, '', {
+      .text(this.scale.width / 2, (maze.height * TILE_Y) / 2, '', {
         fontFamily: 'monospace',
         fontSize: '32px',
         color: this.theme.colors.text,
@@ -363,12 +363,12 @@ export class GameScene extends Phaser.Scene {
     }
     // Sem sprite: desenha cada fruta ativa (no actorsGfx, ja limpo neste frame).
     for (const f of this.state.fruits) {
-      const cx = this.center(f.position.x);
-      const cy = this.center(f.position.y);
+      const px = this.cx(f.position.x);
+      const py = this.cy(f.position.y);
       this.actorsGfx.fillStyle(this.theme.colors.power, 1);
-      this.actorsGfx.fillCircle(cx, cy, TILE * 0.3);
+      this.actorsGfx.fillCircle(px, py, TILE * 0.3);
       this.actorsGfx.lineStyle(2, this.theme.colors.uiAccent, 1);
-      this.actorsGfx.strokeCircle(cx, cy, TILE * 0.3);
+      this.actorsGfx.strokeCircle(px, py, TILE * 0.3);
     }
   }
 
@@ -376,7 +376,7 @@ export class GameScene extends Phaser.Scene {
   private spawnPopups(): void {
     for (const popup of this.state.drainPopups()) {
       const text = this.add
-        .text(this.center(popup.position.x), this.center(popup.position.y), `+${popup.value}`, {
+        .text(this.cx(popup.position.x), this.cy(popup.position.y), `+${popup.value}`, {
           fontFamily: 'monospace',
           fontSize: '18px',
           color: this.theme.colors.text,
@@ -405,8 +405,14 @@ export class GameScene extends Phaser.Scene {
 
   // --- Desenho -----------------------------------------------------------
 
-  private center(cell: number): number {
+  /** Centro X (pixels) da coluna `cell`. */
+  private cx(cell: number): number {
     return cell * TILE + TILE / 2;
+  }
+
+  /** Centro Y (pixels) da linha `cell`. Usa TILE_Y (celula achatada). */
+  private cy(cell: number): number {
+    return cell * TILE_Y + TILE_Y / 2;
   }
 
   /**
@@ -429,11 +435,11 @@ export class GameScene extends Phaser.Scene {
       for (let x = 0; x < maze.width; x++) {
         if (!isW(x, y)) continue;
         const px = x * TILE;
-        const py = y * TILE;
+        const py = y * TILE_Y;
         const left = px + m;
         const right = px + TILE - m;
         const top = py + m;
-        const bottom = py + TILE - m;
+        const bottom = py + TILE_Y - m;
         const N = !isW(x, y - 1);
         const S = !isW(x, y + 1);
         const Wl = !isW(x - 1, y);
@@ -451,11 +457,11 @@ export class GameScene extends Phaser.Scene {
         }
         if (Wl) {
           g.moveTo(left, N ? top + r : py);
-          g.lineTo(left, S ? bottom - r : py + TILE);
+          g.lineTo(left, S ? bottom - r : py + TILE_Y);
         }
         if (E) {
           g.moveTo(right, N ? top + r : py);
-          g.lineTo(right, S ? bottom - r : py + TILE);
+          g.lineTo(right, S ? bottom - r : py + TILE_Y);
         }
         g.strokePath();
 
@@ -474,9 +480,9 @@ export class GameScene extends Phaser.Scene {
     const g = this.wallsGfx;
     const { x, y } = HOUSE_DOOR;
     const w = TILE * 0.8;
-    const h = Math.max(3, TILE * 0.16);
+    const h = Math.max(3, TILE_Y * 0.16);
     g.fillStyle(this.theme.colors.frightened, 1);
-    g.fillRect(x * TILE + (TILE - w) / 2, y * TILE + TILE - h, w, h);
+    g.fillRect(x * TILE + (TILE - w) / 2, y * TILE_Y + TILE_Y - h, w, h);
   }
 
   /** Quarto de circulo (canto arredondado de parede), em seu proprio subpath. */
@@ -505,7 +511,7 @@ export class GameScene extends Phaser.Scene {
     g.clear();
     g.fillStyle(this.theme.colors.pellet, 1);
     for (const c of this.pelletCells) {
-      if (this.state.pellets.hasPellet(c.x, c.y)) g.fillCircle(this.center(c.x), this.center(c.y), TILE * 0.12);
+      if (this.state.pellets.hasPellet(c.x, c.y)) g.fillCircle(this.cx(c.x), this.cy(c.y), TILE * 0.12);
     }
   }
 
@@ -519,15 +525,15 @@ export class GameScene extends Phaser.Scene {
       const key = TEX.powerSlot(i);
       if (this.textures.exists(key)) {
         const off = cardOffset(cell.x, cell.y, cols, rows);
-        const ox = this.center(cell.x) + off.x * TILE;
-        const oy = this.center(cell.y) + off.y * TILE;
+        const ox = this.cx(cell.x) + off.x * TILE;
+        const oy = this.cy(cell.y) + off.y * TILE_Y;
         // Depth 3: acima de paredes/pellets, abaixo dos atores (o jogador passa por cima).
         const node = this.add.image(ox, oy, key).setDepth(3);
-        this.fitDisplaySize(node, POWER_PELLET_CARD.widthTiles * TILE, POWER_PELLET_CARD.heightTiles * TILE);
+        this.fitDisplaySize(node, POWER_PELLET_CARD.widthTiles * TILE, POWER_PELLET_CARD.heightTiles * TILE_Y);
         this.powerNodes.push({ cell, node });
       } else if (this.textures.exists(TEX.power)) {
         this.powerImgs.push(
-          this.add.image(this.center(cell.x), this.center(cell.y), TEX.power).setDisplaySize(TILE * 0.9, TILE * 0.9).setDepth(1),
+          this.add.image(this.cx(cell.x), this.cy(cell.y), TEX.power).setDisplaySize(TILE * 0.9, TILE * 0.9).setDepth(1),
         );
         this.powerPrimitiveCells.push(cell);
       } else {
@@ -567,7 +573,7 @@ export class GameScene extends Phaser.Scene {
     if (!show) return;
     g.fillStyle(this.theme.colors.power, 1);
     for (const c of this.powerPrimitiveCells) {
-      if (this.state.pellets.hasPowerPellet(c.x, c.y)) g.fillCircle(this.center(c.x), this.center(c.y), TILE * 0.32);
+      if (this.state.pellets.hasPowerPellet(c.x, c.y)) g.fillCircle(this.cx(c.x), this.cy(c.y), TILE * 0.32);
     }
   }
 
@@ -584,10 +590,10 @@ export class GameScene extends Phaser.Scene {
    * arraste (o fantasma ja cruzou) e 'from' na predicao (o jogador ainda nao).
    */
   private lerpCells(from: Vec2, to: Vec2, progress: number, snapTo: 'from' | 'to' = 'to'): { x: number; y: number } {
-    const fx = this.center(from.x);
-    const fy = this.center(from.y);
-    const tx = this.center(to.x);
-    const ty = this.center(to.y);
+    const fx = this.cx(from.x);
+    const fy = this.cy(from.y);
+    const tx = this.cx(to.x);
+    const ty = this.cy(to.y);
     if (from.x === to.x && from.y === to.y) return { x: tx, y: ty };
     if (Math.abs(to.x - from.x) > 1 || Math.abs(to.y - from.y) > 1) {
       return snapTo === 'from' ? { x: fx, y: fy } : { x: tx, y: ty };
@@ -624,12 +630,12 @@ export class GameScene extends Phaser.Scene {
       let pos = this.lerpCells(this.state.ghostPrevCell(i), ghost.position, this.state.ghostProgress(i));
       // Bob vertical enquanto espera na casa.
       if (ghost.houseState === 'inside') {
-        pos = { x: this.center(ghost.position.x), y: this.center(ghost.position.y) + Math.sin(this.now * 0.005) * 3 };
+        pos = { x: this.cx(ghost.position.x), y: this.cy(ghost.position.y) + Math.sin(this.now * 0.005) * 3 };
       }
       // Texto opcional embaixo do fantasma, acompanhando a posicao. So aparece
       // quando aquele fantasma tem texto proprio (celula vazia => sem rotulo).
       const label = this.ghostLabels[i];
-      if (label && label.text) label.setPosition(pos.x, pos.y + TILE * 0.5).setVisible(true);
+      if (label && label.text) label.setPosition(pos.x, pos.y + TILE_Y * 0.5).setVisible(true);
       const flash = ghost.mode === 'frightened' && this.state.frightenedRemainingMs < 2000 && this.now % 250 < 125;
       const ref = this.ghostImgs[i];
 

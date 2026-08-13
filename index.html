@@ -17,7 +17,8 @@
         touch-action: none;
       }
       /* Viewport explicito: o Phaser (Scale.FIT) precisa de um container com
-         largura real. Em layout flex o #game colapsava para 0 de largura.
+         largura real. Em layout flex o #game colapsava para 0 de largura, por
+         isso usamos `position: fixed` (box explicito) em vez de flex.
          No Android o app desenha edge-to-edge; sem respeitar as areas seguras,
          a barra de status (topo) e a de navegacao (base) cobriam o jogo. Com
          `viewport-fit=cover` + `env(safe-area-inset-*)`, o #game fica exatamente

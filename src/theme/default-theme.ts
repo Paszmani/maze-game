@@ -33,9 +33,11 @@ export const DEFAULT_THEME: Theme = {
     logo: null,
   },
   gameplay: {
-    playerSpeed: 1.0,
-    ghostSpeed: 0.9,
-    powerDurationMs: 6000,
+    // Ritmo um pouco mais facil e curto: jogador mais rapido (foge melhor e
+    // limpa antes), fantasmas mais lentos, power um pouco mais longo.
+    playerSpeed: 1.15,
+    ghostSpeed: 0.8,
+    powerDurationMs: 7500,
     fruitAsPower: false,
   },
   ghostLabel: { enabled: false, color: 0xffffff, texts: ['', '', '', ''] },

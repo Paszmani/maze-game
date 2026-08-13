@@ -11,7 +11,12 @@
     "eaten": "#555555",
     "uiAccent": "#bbbbbb",
     "text": "#ffffff",
-    "ghosts": ["#ff0000", "#ff66cc", "#00ffff", "#ff9900"]
+    "ghosts": [
+      "#ff0000",
+      "#ff66cc",
+      "#00ffff",
+      "#ff9900"
+    ]
   },
   "branding": {
     "attractHeadline": "DESVIE. COLETE. VENÇA.",
@@ -19,15 +24,31 @@
     "leadHeadline": "Cadastre-se e concorra a um brinde!"
   },
   "gameplay": {
-    "playerSpeed": 1.0,
-    "ghostSpeed": 0.9,
-    "powerDurationMs": 6000
+    "playerSpeed": 1.15,
+    "ghostSpeed": 0.8,
+    "powerDurationMs": 7500
   },
   "leadForm": {
     "fields": [
-      { "id": "name", "label": "Nome", "type": "text", "required": true, "maxLength": 60 },
-      { "id": "email", "label": "E-mail", "type": "email", "required": true },
-      { "id": "phone", "label": "Telefone", "type": "tel", "required": false }
+      {
+        "id": "name",
+        "label": "Nome",
+        "type": "text",
+        "required": true,
+        "maxLength": 60
+      },
+      {
+        "id": "email",
+        "label": "E-mail",
+        "type": "email",
+        "required": true
+      },
+      {
+        "id": "phone",
+        "label": "Telefone",
+        "type": "tel",
+        "required": false
+      }
     ]
   }
 }
