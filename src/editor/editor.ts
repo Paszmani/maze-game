@@ -127,6 +127,14 @@ function textInput(get: () => string, set: (v: string) => void): HTMLInputElemen
   i.addEventListener('input', () => { set(i.value); schedule(); });
   return i;
 }
+function textArea(get: () => string, set: (v: string) => void): HTMLTextAreaElement {
+  // Multilinha: Enter insere quebra de linha (\n), preservada no tema e
+  // renderizada em varias linhas embaixo do fantasma (Phaser Text, align center).
+  const t = h('textarea', { rows: 2 });
+  t.value = get();
+  t.addEventListener('input', () => { set(t.value); schedule(); });
+  return t;
+}
 function numberInput(get: () => number, set: (v: number) => void, step: number): HTMLInputElement {
   const i = h('input');
   i.type = 'number';
@@ -331,7 +339,7 @@ function buildAll(): void {
     row('Cor do texto', colorInput(() => draft.ghostLabel.color, (v) => (draft.ghostLabel.color = v))),
     // Texto proprio por fantasma (vazio => aquele fica sem rotulo).
     ...GHOST_LABELS.map((label, i) =>
-      row(`Texto — ${label}`, textInput(() => draft.ghostLabel.texts[i]!, (v) => (draft.ghostLabel.texts[i] = v))),
+      row(`Texto — ${label}`, textArea(() => draft.ghostLabel.texts[i]!, (v) => (draft.ghostLabel.texts[i] = v))),
     ),
   ));
 
