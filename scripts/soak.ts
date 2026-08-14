@@ -19,7 +19,7 @@ import { Player } from '../src/core/player.js';
 import { Ghost } from '../src/core/ghost-ai.js';
 import { GameState } from '../src/core/game-state.js';
 import { Direction, DIRECTION_VECTORS, type Vec2 } from '../src/core/direction.js';
-import { MAZE_LAYOUT, PLAYER_SPAWN, GHOST_SPAWNS, FRUIT_POSITION } from '../src/render/maze-layout.js';
+import { MAZE_LAYOUT, PLAYER_SPAWN, GHOST_SPAWNS, FRUIT_POSITIONS } from '../src/render/maze-layout.js';
 
 const ROWS = [...MAZE_LAYOUT];
 const DIRS = [Direction.Up, Direction.Down, Direction.Left, Direction.Right] as const;
@@ -47,7 +47,7 @@ function buildState(withGhosts: boolean): GameState {
     pellets,
     player,
     ghosts,
-    config: { fruitPosition: { ...FRUIT_POSITION } },
+    config: { fruitPositions: FRUIT_POSITIONS.map((p) => ({ ...p })) },
     // RNG deterministico p/ reprodutibilidade (frightened).
     rng: mulberry32(0xc0ffee),
   });

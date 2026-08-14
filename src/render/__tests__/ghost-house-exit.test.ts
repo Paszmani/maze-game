@@ -105,10 +105,10 @@ describe('Casa dos fantasmas — saida roteirizada (maze real)', () => {
   // IA greedy dos olhos, que ficavam presos ao redor da casa sem achar a porta.
   // O retorno por BFS tem que trazer os olhos de QUALQUER ponto ate o centro.
   it.each([
-    { x: 13, y: 17 }, // logo abaixo da casa (conector inferior)
-    { x: 6, y: 8 }, // corredor lateral-superior
+    { x: 9, y: 12 }, // logo abaixo da casa (conector inferior)
+    { x: 1, y: 10 }, // corredor do tunel (lateral)
     { x: 1, y: 1 }, // canto superior esquerdo
-    { x: 26, y: 29 }, // canto inferior direito
+    { x: 17, y: 19 }, // canto inferior direito
   ])('olhos comidos em (%o) voltam para a casa sem travar', (start) => {
     const gs = build({ dotLimits: { blinky: 0, pinky: 0, inky: 0, clyde: 0 } });
     gs.start();

@@ -193,6 +193,8 @@ export class GameScene extends Phaser.Scene {
         ? this.add.image(0, 0, key).setDisplaySize(TILE * 0.95, TILE * 0.95).setDepth(5)
         : null;
     this.playerImg = sprite(TEX.player);
+    // Player um pouco maior que os fantasmas (o sprite base usa TILE*0.95).
+    this.playerImg?.setDisplaySize(TILE * 1.1, TILE * 1.1);
     this.ghostImgs = ghosts.map((gh) => ({ img: sprite(TEX.ghost(gh.personality)), base: TEX.ghost(gh.personality) }));
 
     // Texto opcional embaixo dos fantasmas (habilitado no editor de tema). Um Text
@@ -666,7 +668,7 @@ export class GameScene extends Phaser.Scene {
   /** Pac-Man primitivo com boca animada, apontando na direcao do movimento. */
   private drawPacman(x: number, y: number, dir: Direction): void {
     const g = this.actorsGfx;
-    const r = TILE * 0.42;
+    const r = TILE * 0.5;
     const open = (Math.sin(this.now * 0.012) + 1) / 2; // 0..1
     const mouth = Phaser.Math.DegToRad(6 + open * 34);
     const a = Phaser.Math.DegToRad(this.dirAngle(dir));

@@ -47,8 +47,8 @@ describe('maze-layout — estrutura', () => {
   it('todas as linhas tem a mesma largura (grade retangular)', () => {
     const w = MAZE_LAYOUT[0]!.length;
     for (const row of MAZE_LAYOUT) expect(row.length).toBe(w);
-    expect(w).toBe(28);
-    expect(MAZE_LAYOUT.length).toBe(31);
+    expect(w).toBe(19);
+    expect(MAZE_LAYOUT.length).toBe(21);
   });
 
   it('mantem exatamente 4 power-pellets', () => {
